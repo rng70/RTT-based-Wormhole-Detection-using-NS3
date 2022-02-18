@@ -98,6 +98,18 @@ public:
    */
   uint32_t GetNSamples (void) const;
 
+  /**
+   * \Returns actual RTT measurements.
+   */
+
+  Time MeasuredRttSample(void) const;
+
+  /**
+   * \Returns delta between estimate and current rtt sample.
+   */
+
+  Time CurrentDelta(void) const;
+
 private:
   Time m_initialEstimatedRtt; //!< Initial RTT estimation
 
@@ -105,6 +117,10 @@ protected:
   Time         m_estimatedRtt;            //!< Current estimate
   Time         m_estimatedVariation;   //!< Current estimate variation
   uint32_t     m_nSamples;                //!< Number of samples
+
+  /**Added ****************************************************/
+  Time m_SampledRTT;   //!< Current estimate variation
+  Time m_CurrentDelta; //!< Current estimate variation
 };
 
 /**
