@@ -45,6 +45,8 @@
 #include <algorithm>
 #include <limits>
 
+using namespace std;
+
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("AodvRoutingProtocol");
@@ -182,120 +184,154 @@ RoutingProtocol::RoutingProtocol ()
 TypeId
 RoutingProtocol::GetTypeId (void)
 {
-  static TypeId tid = TypeId ("ns3::aodv::RoutingProtocol")
-    .SetParent<Ipv4RoutingProtocol> ()
-    .SetGroupName ("Aodv")
-    .AddConstructor<RoutingProtocol> ()
-    .AddAttribute ("HelloInterval", "HELLO messages emission interval.",
-                   TimeValue (Seconds (1)),
-                   MakeTimeAccessor (&RoutingProtocol::m_helloInterval),
-                   MakeTimeChecker ())
-    .AddAttribute ("TtlStart", "Initial TTL value for RREQ.",
-                   UintegerValue (1),
-                   MakeUintegerAccessor (&RoutingProtocol::m_ttlStart),
-                   MakeUintegerChecker<uint16_t> ())
-    .AddAttribute ("TtlIncrement", "TTL increment for each attempt using the expanding ring search for RREQ dissemination.",
-                   UintegerValue (2),
-                   MakeUintegerAccessor (&RoutingProtocol::m_ttlIncrement),
-                   MakeUintegerChecker<uint16_t> ())
-    .AddAttribute ("TtlThreshold", "Maximum TTL value for expanding ring search, TTL = NetDiameter is used beyond this value.",
-                   UintegerValue (7),
-                   MakeUintegerAccessor (&RoutingProtocol::m_ttlThreshold),
-                   MakeUintegerChecker<uint16_t> ())
-    .AddAttribute ("TimeoutBuffer", "Provide a buffer for the timeout.",
-                   UintegerValue (2),
-                   MakeUintegerAccessor (&RoutingProtocol::m_timeoutBuffer),
-                   MakeUintegerChecker<uint16_t> ())
-    .AddAttribute ("RreqRetries", "Maximum number of retransmissions of RREQ to discover a route",
-                   UintegerValue (2),
-                   MakeUintegerAccessor (&RoutingProtocol::m_rreqRetries),
-                   MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("RreqRateLimit", "Maximum number of RREQ per second.",
-                   UintegerValue (10),
-                   MakeUintegerAccessor (&RoutingProtocol::m_rreqRateLimit),
-                   MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("RerrRateLimit", "Maximum number of RERR per second.",
-                   UintegerValue (10),
-                   MakeUintegerAccessor (&RoutingProtocol::m_rerrRateLimit),
-                   MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("NodeTraversalTime", "Conservative estimate of the average one hop traversal time for packets and should include "
-                   "queuing delays, interrupt processing times and transfer times.",
-                   TimeValue (MilliSeconds (40)),
-                   MakeTimeAccessor (&RoutingProtocol::m_nodeTraversalTime),
-                   MakeTimeChecker ())
-    .AddAttribute ("NextHopWait", "Period of our waiting for the neighbour's RREP_ACK = 10 ms + NodeTraversalTime",
-                   TimeValue (MilliSeconds (50)),
-                   MakeTimeAccessor (&RoutingProtocol::m_nextHopWait),
-                   MakeTimeChecker ())
-    .AddAttribute ("ActiveRouteTimeout", "Period of time during which the route is considered to be valid",
-                   TimeValue (Seconds (3)),
-                   MakeTimeAccessor (&RoutingProtocol::m_activeRouteTimeout),
-                   MakeTimeChecker ())
-    .AddAttribute ("MyRouteTimeout", "Value of lifetime field in RREP generating by this node = 2 * max(ActiveRouteTimeout, PathDiscoveryTime)",
-                   TimeValue (Seconds (11.2)),
-                   MakeTimeAccessor (&RoutingProtocol::m_myRouteTimeout),
-                   MakeTimeChecker ())
-    .AddAttribute ("BlackListTimeout", "Time for which the node is put into the blacklist = RreqRetries * NetTraversalTime",
-                   TimeValue (Seconds (5.6)),
-                   MakeTimeAccessor (&RoutingProtocol::m_blackListTimeout),
-                   MakeTimeChecker ())
-    .AddAttribute ("DeletePeriod", "DeletePeriod is intended to provide an upper bound on the time for which an upstream node A "
-                   "can have a neighbor B as an active next hop for destination D, while B has invalidated the route to D."
-                   " = 5 * max (HelloInterval, ActiveRouteTimeout)",
-                   TimeValue (Seconds (15)),
-                   MakeTimeAccessor (&RoutingProtocol::m_deletePeriod),
-                   MakeTimeChecker ())
-    .AddAttribute ("NetDiameter", "Net diameter measures the maximum possible number of hops between two nodes in the network",
-                   UintegerValue (35),
-                   MakeUintegerAccessor (&RoutingProtocol::m_netDiameter),
-                   MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("NetTraversalTime", "Estimate of the average net traversal time = 2 * NodeTraversalTime * NetDiameter",
-                   TimeValue (Seconds (2.8)),
-                   MakeTimeAccessor (&RoutingProtocol::m_netTraversalTime),
-                   MakeTimeChecker ())
-    .AddAttribute ("PathDiscoveryTime", "Estimate of maximum time needed to find route in network = 2 * NetTraversalTime",
-                   TimeValue (Seconds (5.6)),
-                   MakeTimeAccessor (&RoutingProtocol::m_pathDiscoveryTime),
-                   MakeTimeChecker ())
-    .AddAttribute ("MaxQueueLen", "Maximum number of packets that we allow a routing protocol to buffer.",
-                   UintegerValue (64),
-                   MakeUintegerAccessor (&RoutingProtocol::SetMaxQueueLen,
-                                         &RoutingProtocol::GetMaxQueueLen),
-                   MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("MaxQueueTime", "Maximum time packets can be queued (in seconds)",
-                   TimeValue (Seconds (30)),
-                   MakeTimeAccessor (&RoutingProtocol::SetMaxQueueTime,
-                                     &RoutingProtocol::GetMaxQueueTime),
-                   MakeTimeChecker ())
-    .AddAttribute ("AllowedHelloLoss", "Number of hello messages which may be loss for valid link.",
-                   UintegerValue (2),
-                   MakeUintegerAccessor (&RoutingProtocol::m_allowedHelloLoss),
-                   MakeUintegerChecker<uint16_t> ())
-    .AddAttribute ("GratuitousReply", "Indicates whether a gratuitous RREP should be unicast to the node originated route discovery.",
-                   BooleanValue (true),
-                   MakeBooleanAccessor (&RoutingProtocol::SetGratuitousReplyFlag,
-                                        &RoutingProtocol::GetGratuitousReplyFlag),
-                   MakeBooleanChecker ())
-    .AddAttribute ("DestinationOnly", "Indicates only the destination may respond to this RREQ.",
-                   BooleanValue (false),
-                   MakeBooleanAccessor (&RoutingProtocol::SetDestinationOnlyFlag,
-                                        &RoutingProtocol::GetDestinationOnlyFlag),
-                   MakeBooleanChecker ())
-    .AddAttribute ("EnableHello", "Indicates whether a hello messages enable.",
-                   BooleanValue (true),
-                   MakeBooleanAccessor (&RoutingProtocol::SetHelloEnable,
-                                        &RoutingProtocol::GetHelloEnable),
-                   MakeBooleanChecker ())
-    .AddAttribute ("EnableBroadcast", "Indicates whether a broadcast data packets forwarding enable.",
-                   BooleanValue (true),
-                   MakeBooleanAccessor (&RoutingProtocol::SetBroadcastEnable,
-                                        &RoutingProtocol::GetBroadcastEnable),
-                   MakeBooleanChecker ())
-    .AddAttribute ("UniformRv",
-                   "Access to the underlying UniformRandomVariable",
-                   StringValue ("ns3::UniformRandomVariable"),
-                   MakePointerAccessor (&RoutingProtocol::m_uniformRandomVariable),
-                   MakePointerChecker<UniformRandomVariable> ())
+  static TypeId tid = TypeId("ns3::aodv::RoutingProtocol")
+                          .SetParent<Ipv4RoutingProtocol>()
+                          .SetGroupName("Aodv")
+                          .AddConstructor<RoutingProtocol>()
+                          .AddAttribute("HelloInterval", "HELLO messages emission interval.",
+                                        TimeValue(Seconds(1)),
+                                        MakeTimeAccessor(&RoutingProtocol::m_helloInterval),
+                                        MakeTimeChecker())
+                          .AddAttribute("TtlStart", "Initial TTL value for RREQ.",
+                                        UintegerValue(1),
+                                        MakeUintegerAccessor(&RoutingProtocol::m_ttlStart),
+                                        MakeUintegerChecker<uint16_t>())
+                          .AddAttribute("TtlIncrement", "TTL increment for each attempt using the expanding ring search for RREQ dissemination.",
+                                        UintegerValue(2),
+                                        MakeUintegerAccessor(&RoutingProtocol::m_ttlIncrement),
+                                        MakeUintegerChecker<uint16_t>())
+                          .AddAttribute("TtlThreshold", "Maximum TTL value for expanding ring search, TTL = NetDiameter is used beyond this value.",
+                                        UintegerValue(7),
+                                        MakeUintegerAccessor(&RoutingProtocol::m_ttlThreshold),
+                                        MakeUintegerChecker<uint16_t>())
+                          .AddAttribute("TimeoutBuffer", "Provide a buffer for the timeout.",
+                                        UintegerValue(2),
+                                        MakeUintegerAccessor(&RoutingProtocol::m_timeoutBuffer),
+                                        MakeUintegerChecker<uint16_t>())
+                          .AddAttribute("RreqRetries", "Maximum number of retransmissions of RREQ to discover a route",
+                                        UintegerValue(2),
+                                        MakeUintegerAccessor(&RoutingProtocol::m_rreqRetries),
+                                        MakeUintegerChecker<uint32_t>())
+                          .AddAttribute("RreqRateLimit", "Maximum number of RREQ per second.",
+                                        UintegerValue(10),
+                                        MakeUintegerAccessor(&RoutingProtocol::m_rreqRateLimit),
+                                        MakeUintegerChecker<uint32_t>())
+                          .AddAttribute("RerrRateLimit", "Maximum number of RERR per second.",
+                                        UintegerValue(10),
+                                        MakeUintegerAccessor(&RoutingProtocol::m_rerrRateLimit),
+                                        MakeUintegerChecker<uint32_t>())
+                          .AddAttribute("NodeTraversalTime", "Conservative estimate of the average one hop traversal time for packets and should include "
+                                                             "queuing delays, interrupt processing times and transfer times.",
+                                        TimeValue(MilliSeconds(40)),
+                                        MakeTimeAccessor(&RoutingProtocol::m_nodeTraversalTime),
+                                        MakeTimeChecker())
+                          .AddAttribute("NextHopWait", "Period of our waiting for the neighbour's RREP_ACK = 10 ms + NodeTraversalTime",
+                                        TimeValue(MilliSeconds(50)),
+                                        MakeTimeAccessor(&RoutingProtocol::m_nextHopWait),
+                                        MakeTimeChecker())
+                          .AddAttribute("ActiveRouteTimeout", "Period of time during which the route is considered to be valid",
+                                        TimeValue(Seconds(3)),
+                                        MakeTimeAccessor(&RoutingProtocol::m_activeRouteTimeout),
+                                        MakeTimeChecker())
+                          .AddAttribute("MyRouteTimeout", "Value of lifetime field in RREP generating by this node = 2 * max(ActiveRouteTimeout, PathDiscoveryTime)",
+                                        TimeValue(Seconds(11.2)),
+                                        MakeTimeAccessor(&RoutingProtocol::m_myRouteTimeout),
+                                        MakeTimeChecker())
+                          .AddAttribute("BlackListTimeout", "Time for which the node is put into the blacklist = RreqRetries * NetTraversalTime",
+                                        TimeValue(Seconds(5.6)),
+                                        MakeTimeAccessor(&RoutingProtocol::m_blackListTimeout),
+                                        MakeTimeChecker())
+                          .AddAttribute("DeletePeriod", "DeletePeriod is intended to provide an upper bound on the time for which an upstream node A "
+                                                        "can have a neighbor B as an active next hop for destination D, while B has invalidated the route to D."
+                                                        " = 5 * max (HelloInterval, ActiveRouteTimeout)",
+                                        TimeValue(Seconds(15)),
+                                        MakeTimeAccessor(&RoutingProtocol::m_deletePeriod),
+                                        MakeTimeChecker())
+                          .AddAttribute("NetDiameter", "Net diameter measures the maximum possible number of hops between two nodes in the network",
+                                        UintegerValue(35),
+                                        MakeUintegerAccessor(&RoutingProtocol::m_netDiameter),
+                                        MakeUintegerChecker<uint32_t>())
+                          .AddAttribute("NetTraversalTime", "Estimate of the average net traversal time = 2 * NodeTraversalTime * NetDiameter",
+                                        TimeValue(Seconds(2.8)),
+                                        MakeTimeAccessor(&RoutingProtocol::m_netTraversalTime),
+                                        MakeTimeChecker())
+                          .AddAttribute("PathDiscoveryTime", "Estimate of maximum time needed to find route in network = 2 * NetTraversalTime",
+                                        TimeValue(Seconds(5.6)),
+                                        MakeTimeAccessor(&RoutingProtocol::m_pathDiscoveryTime),
+                                        MakeTimeChecker())
+                          .AddAttribute("MaxQueueLen", "Maximum number of packets that we allow a routing protocol to buffer.",
+                                        UintegerValue(64),
+                                        MakeUintegerAccessor(&RoutingProtocol::SetMaxQueueLen,
+                                                             &RoutingProtocol::GetMaxQueueLen),
+                                        MakeUintegerChecker<uint32_t>())
+                          .AddAttribute("MaxQueueTime", "Maximum time packets can be queued (in seconds)",
+                                        TimeValue(Seconds(30)),
+                                        MakeTimeAccessor(&RoutingProtocol::SetMaxQueueTime,
+                                                         &RoutingProtocol::GetMaxQueueTime),
+                                        MakeTimeChecker())
+                          .AddAttribute("AllowedHelloLoss", "Number of hello messages which may be loss for valid link.",
+                                        UintegerValue(2),
+                                        MakeUintegerAccessor(&RoutingProtocol::m_allowedHelloLoss),
+                                        MakeUintegerChecker<uint16_t>())
+                          .AddAttribute("GratuitousReply", "Indicates whether a gratuitous RREP should be unicast to the node originated route discovery.",
+                                        BooleanValue(true),
+                                        MakeBooleanAccessor(&RoutingProtocol::SetGratuitousReplyFlag,
+                                                            &RoutingProtocol::GetGratuitousReplyFlag),
+                                        MakeBooleanChecker())
+                          .AddAttribute("DestinationOnly", "Indicates only the destination may respond to this RREQ.",
+                                        BooleanValue(false),
+                                        MakeBooleanAccessor(&RoutingProtocol::SetDestinationOnlyFlag,
+                                                            &RoutingProtocol::GetDestinationOnlyFlag),
+                                        MakeBooleanChecker())
+                          .AddAttribute("EnableHello", "Indicates whether a hello messages enable.",
+                                        BooleanValue(true),
+                                        MakeBooleanAccessor(&RoutingProtocol::SetHelloEnable,
+                                                            &RoutingProtocol::GetHelloEnable),
+                                        MakeBooleanChecker())
+                          .AddAttribute("EnableBroadcast", "Indicates whether a broadcast data packets forwarding enable.",
+                                        BooleanValue(true),
+                                        MakeBooleanAccessor(&RoutingProtocol::SetBroadcastEnable,
+                                                            &RoutingProtocol::GetBroadcastEnable),
+                                        MakeBooleanChecker())
+                          .AddAttribute("UniformRv",
+                                        "Access to the underlying UniformRandomVariable",
+                                        StringValue("ns3::UniformRandomVariable"),
+                                        MakePointerAccessor(&RoutingProtocol::m_uniformRandomVariable),
+                                        MakePointerChecker<UniformRandomVariable>())
+                          .AddAttribute("IsMalicious", "Is the node malicious",
+                                        BooleanValue(false),
+                                        MakeBooleanAccessor(&RoutingProtocol::SetMaliciousEnable,
+                                                            &RoutingProtocol::GetMaliciousEnable),
+                                        MakeBooleanChecker())
+
+                          /*Introduction of attributes to enable the wormhole attack feature*/
+                          // CNLAB
+                          .AddAttribute("EnableWrmAttack",
+                                        "Indicates whether a Wormhole Attack is enabled or not.",
+                                        BooleanValue(false),
+                                        MakeBooleanAccessor(&RoutingProtocol::SetWrmAttackEnable,
+                                                            &RoutingProtocol::GetWrmAttackEnable),
+                                        MakeBooleanChecker())
+                          .AddAttribute("FirstEndOfWormTunnel",
+                                        "Indicates the first end of the Wormhole tunnel.",
+                                        Ipv4AddressValue("10.1.2.1"),
+                                        MakeIpv4AddressAccessor(&RoutingProtocol::FirstEndOfWormTunnel),
+                                        MakeIpv4AddressChecker())
+                          .AddAttribute("SecondEndOfWormTunnel",
+                                        "Indicates the second end of the Wormhole tunnel",
+                                        Ipv4AddressValue("10.1.2.2"),
+                                        MakeIpv4AddressAccessor(&RoutingProtocol::SecondEndOfWormTunnel),
+                                        MakeIpv4AddressChecker())
+                          .AddAttribute("FirstEndWifiWormTunnel",
+                                        "Indicates the wifi interface of the first end of the Wormhole tunnel",
+                                        Ipv4AddressValue("10.0.1.37"),
+                                        MakeIpv4AddressAccessor(&RoutingProtocol::FirstEndWifiWormTunnel),
+                                        MakeIpv4AddressChecker())
+                          .AddAttribute("SecondEndWifiWormTunnel",
+                                        "Indicates the wifi interface of the second end of the Wormhole tunnel",
+                                        Ipv4AddressValue("10.0.1.38"),
+                                        MakeIpv4AddressAccessor(&RoutingProtocol::SecondEndWifiWormTunnel),
+                                        MakeIpv4AddressChecker());
   ;
   return tid;
 }
@@ -566,6 +602,15 @@ RoutingProtocol::RouteInput (Ptr<const Packet> p, const Ipv4Header &header,
       if (lcb.IsNull () == false)
         {
           NS_LOG_LOGIC ("Unicast local delivery to " << dst);
+
+          /**
+           * @brief addd by rng70
+           */
+          if(EnableWrmAttack){ // TODO check and delete
+            if(dst==FirstEndOfWormTunnel || dst==SecondEndOfWormTunnel){
+              iff = 1;
+            }
+          }
           lcb (p, header, iif);
         }
       else
@@ -597,6 +642,18 @@ RoutingProtocol::Forwarding (Ptr<const Packet> p, const Ipv4Header & header,
   Ipv4Address origin = header.GetSource ();
   m_routingTable.Purge ();
   RoutingTableEntry toDst;
+  /**
+   * @brief code added by rng70
+   * @brief check if the node supposed to behave maliciously
+   */
+  if(IsMalicious){
+    /* when malicious node receives packet it drops the packet */
+    std::cout << "Launching Attack! Packet dropped" << std::endl;
+    return false;
+  }
+  /**
+   * @brief added code ends here
+   */ // TODO check
   if (m_routingTable.LookupRoute (dst, toDst))
     {
       if (toDst.GetFlag () == VALID)
@@ -610,23 +667,23 @@ RoutingProtocol::Forwarding (Ptr<const Packet> p, const Ipv4Header & header,
            *  path to the destination is updated to be no less than the current
            *  time plus ActiveRouteTimeout.
            */
-          UpdateRouteLifeTime (origin, m_activeRouteTimeout);
-          UpdateRouteLifeTime (dst, m_activeRouteTimeout);
-          UpdateRouteLifeTime (route->GetGateway (), m_activeRouteTimeout);
-          /*
-           *  Since the route between each originator and destination pair is expected to be symmetric, the
-           *  Active Route Lifetime for the previous hop, along the reverse path back to the IP source, is also updated
-           *  to be no less than the current time plus ActiveRouteTimeout
-           */
-          RoutingTableEntry toOrigin;
-          m_routingTable.LookupRoute (origin, toOrigin);
-          UpdateRouteLifeTime (toOrigin.GetNextHop (), m_activeRouteTimeout);
+    UpdateRouteLifeTime(origin, m_activeRouteTimeout);
+    UpdateRouteLifeTime(dst, m_activeRouteTimeout);
+    UpdateRouteLifeTime(route->GetGateway(), m_activeRouteTimeout);
+    /*
+     *  Since the route between each originator and destination pair is expected to be symmetric, the
+     *  Active Route Lifetime for the previous hop, along the reverse path back to the IP source, is also updated
+     *  to be no less than the current time plus ActiveRouteTimeout
+     */
+    RoutingTableEntry toOrigin;
+    m_routingTable.LookupRoute(origin, toOrigin);
+    UpdateRouteLifeTime(toOrigin.GetNextHop(), m_activeRouteTimeout);
 
-          m_nb.Update (route->GetGateway (), m_activeRouteTimeout);
-          m_nb.Update (toOrigin.GetNextHop (), m_activeRouteTimeout);
+    m_nb.Update(route->GetGateway(), m_activeRouteTimeout);
+    m_nb.Update(toOrigin.GetNextHop(), m_activeRouteTimeout);
 
-          ucb (route, p, header);
-          return true;
+    ucb(route, p, header);
+    return true;
         }
       else
         {
@@ -1045,6 +1102,7 @@ RoutingProtocol::SendRequest (Ipv4Address dst)
   rreqHeader.SetOriginSeqno (m_seqNo);
   m_requestId++;
   rreqHeader.SetId (m_requestId);
+  // rreqHeader.SetHopCount(0); //TODO check if it is necessary
 
   // Send RREQ as subnet directed broadcast from each interface used by aodv
   for (std::map<Ptr<Socket>, Ipv4InterfaceAddress>::const_iterator j =
@@ -1139,6 +1197,29 @@ RoutingProtocol::RecvAodv (Ptr<Socket> socket)
       NS_ASSERT_MSG (false, "Received a packet from an unknown socket");
     }
   NS_LOG_DEBUG ("AODV node " << this << " received a AODV packet from " << sender << " to " << receiver);
+
+  /**
+   * @brief code added by rng70
+   * //TODO check
+   */
+  if (EnableWrmAttack) // CNLAB
+  {
+    // cout <<endl<<"Received AODV Packet at Wormhole Node"<<endl;
+    // cout<<"Sender IP Address-"<<sender<<endl;
+    // cout<<"First End of Wormhole Tunnel"<<FirstEndWifiWormTunnel<<endl;
+    // cout<<"Receiver IP Address-"<<receiver<<endl;
+    // cout<<"Second End of Wifi Tunnel"<<SecondEndWifiWormTunnel;
+    if (sender == FirstEndOfWormTunnel && receiver == SecondEndWifiWormTunnel)
+    {
+      // cout<<"Received by Second Wifi Wrm Tunnel"<<endl;
+      receiver = SecondEndOfWormTunnel;
+    }
+    if (sender == SecondEndOfWormTunnel && receiver == FirstEndWifiWormTunnel)
+    {
+      // cout<<"Received by First Wifi Wrm Tunnel"<<endl;
+      receiver = FirstEndOfWormTunnel;
+    }
+  }
 
   UpdateRouteToNeighbor (sender, receiver);
   TypeHeader tHeader (AODVTYPE_RREQ);
