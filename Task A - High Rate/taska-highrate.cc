@@ -19,7 +19,6 @@
 #include "ns3/network-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/mobility-module.h"
-#include "ns3/csma-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/ssid.h"
@@ -58,30 +57,40 @@ void CalculateThroughput()
 
 int main(int argc, char *argv[])
 {
-    uint32_t nWifi = 10;
-    int no_of_flow = 10;
-    uint32_t packets = 2;
-
+    /**
+     * @brief variable section
+    //  */
+    // int nodeSpeed = 10;                    /* Speed of nodes in m/s */
+    // int nodePause = 0;                     /* Pause time in s */
+    int nflows = 10;                       /* Number of flow */
+    uint32_t nWifi = 5;                    /* Number of nodes */
+    uint32_t nPackets = 2;                 /* Number of packets send per second */
     uint32_t payloadSize = 1024;           /* Transport layer payload size in bytes. */
-    std::string dataRate = "100Mbps";      /* Application layer datarate. */
+    std::string dataRate = "4Mbps";        /* Application layer datarate. */
     std::string tcpVariant = "TcpNewReno"; /* TCP variant type. */
     std::string phyRate = "HtMcs7";        /* Physical layer bitrate. */
-    double simulationTime = 2;             /* Simulation time in seconds. */
+    double simulationTime = 120;           /* Simulation time in seconds. */
 
+    /* this is for performance management */
+    uint32_t SentPackets = 0;
+    uint32_t ReceivedPackets = 0;
+    uint32_t LostPackets = 0;
+    /* variable declaration ends here */
+
+    /* prosessing for cmd persing */
     CommandLine cmd(__FILE__);
+    cmd.AddValue("nFlows", "Number of flow", nflows);
     cmd.AddValue("nWifi", "Number of wifi STA devices", nWifi);
-    cmd.AddValue("no_of_flow", "Number of flow", no_of_flow);
     cmd.AddValue("payloadSize", "Payload size in bytes", payloadSize);
     cmd.AddValue("dataRate", "Application data ate", dataRate);
-    cmd.AddValue("tcpVariant", "Transport protocol to use: TcpNewReno, "
-                               "TcpHybla, TcpHighSpeed, TcpHtcp, TcpVegas, TcpScalable, TcpVeno, "
-                               "TcpBic, TcpYeah, TcpIllinois, TcpWestwood, TcpWestwoodPlus, TcpLedbat ",
-                 tcpVariant);
+    cmd.AddValue("tcpVariant", "Transport protocol to use: TcpNewReno, TcpHybla, TcpHighSpeed, TcpHtcp, TcpVegas, TcpScalable, TcpVeno, TcpBic, TcpYeah, TcpIllinois, TcpWestwood, TcpWestwoodPlus, TcpLedbat ", tcpVariant);
     cmd.AddValue("phyRate", "Physical layer bitrate", phyRate);
-    cmd.AddValue("numPackets", "Total number of packets", packets);
+    cmd.AddValue("nPackets", "Total number of packets", nPackets);
     cmd.AddValue("simulationTime", "Simulation time in seconds", simulationTime);
     cmd.Parse(argc, argv);
+    /* cmd perse ends here */
 
+    /* this is for selecting and configuring tcp client */
     tcpVariant = std::string("ns3::") + tcpVariant;
     // Select TCP variant
     if (tcpVariant.compare("ns3::TcpWestwoodPlus") == 0)
@@ -101,13 +110,15 @@ int main(int argc, char *argv[])
     /* Configure TCP Options */
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(payloadSize));
 
+    /* configuring TCP ends here */
+
+    /* Setting wifi devices starts here */
     NodeContainer p2pNodes;
     p2pNodes.Create(2);
 
     PointToPointHelper pointToPoint;
-    pointToPoint.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
+    pointToPoint.SetDeviceAttribute("DataRate", StringValue(dataRate));
     pointToPoint.SetChannelAttribute("Delay", StringValue("10ms"));
-    // pointToPoint.SetQueue("ns3::DropTailQueue"); //TODO delete
 
     NetDeviceContainer p2pDevices;
     p2pDevices = pointToPoint.Install(p2pNodes);
@@ -116,8 +127,8 @@ int main(int argc, char *argv[])
      * @brief from here
      */
     NodeContainer leftNodes, rightNodes;
-    leftNodes.Create(nWifi / 2);
-    rightNodes.Create(nWifi / 2);
+    leftNodes.Create(nWifi);
+    rightNodes.Create(nWifi);
 
     NodeContainer leftAp = p2pNodes.Get(0);
     NodeContainer rightAp = p2pNodes.Get(1);
@@ -154,7 +165,7 @@ int main(int argc, char *argv[])
     NetDeviceContainer leftStaDevices;
     NetDeviceContainer rightStaDevices;
     leftStaDevices = leftWifiHelper.Install(leftWifiPhy, leftWifiMac, leftNodes);
-    githStaDevices = rightWifiHelper.Install(rightWifiPhy, rightWifiMac, rightNodes);
+    rightStaDevices = rightWifiHelper.Install(rightWifiPhy, rightWifiMac, rightNodes);
 
     /* Configure AP */
     leftWifiMac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
@@ -165,23 +176,66 @@ int main(int argc, char *argv[])
     rightApDevice = rightWifiHelper.Install(rightWifiPhy, rightWifiMac, rightAp);
 
     /*  Mobility Model */
-    MobilityHelper mobility;
+    // MobilityHelper mobility;
 
-    mobility.SetPositionAllocator("ns3::GridPositionAllocator",
-                                  "MinX", DoubleValue(0.0),
-                                  "MinY", DoubleValue(0.0),
-                                  "DeltaX", DoubleValue(5.0),
-                                  "DeltaY", DoubleValue(10.0),
-                                  "GridWidth", UintegerValue(3),
-                                  "LayoutType", StringValue("RowFirst"));
+    // mobility.SetPositionAllocator("ns3::GridPositionAllocator",
+    //                               "MinX", DoubleValue(0.0),
+    //                               "MinY", DoubleValue(0.0),
+    //                               "DeltaX", DoubleValue(5.0),
+    //                               "DeltaY", DoubleValue(10.0),
+    //                               "GridWidth", UintegerValue(3),
+    //                               "LayoutType", StringValue("RowFirst"));
 
-    mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
-                              "Bounds", RectangleValue(Rectangle(-50, 50, -50, 50)));
-    mobility.Install(leftNodes);
-    mobility.Install(rightNodes);
+    // mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel", "Bounds", RectangleValue(Rectangle(-100, 100, -100, 100)));
 
-    mobility.Install(leftAp);
-    mobility.Install(rightAp);
+    // MobilityHelper mobilityAdhoc;
+    // int64_t streamIndex1 = 0; // used to get consistent mobility across scenarios
+    // int64_t streamIndex2 = 0; // used to get consistent mobility across scenarios
+    // int64_t streamIndex3 = 0; // used to get consistent mobility across scenarios
+    // int64_t streamIndex4 = 0; // used to get consistent mobility across scenarios
+
+    // ObjectFactory pos;
+    // pos.SetTypeId("ns3::RandomRectanglePositionAllocator");
+    // pos.Set("X", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=300.0]"));
+    // pos.Set("Y", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1500.0]"));
+
+    // Ptr<PositionAllocator> taPositionAlloc = pos.Create()->GetObject<PositionAllocator>();
+    // streamIndex1 += taPositionAlloc->AssignStreams(streamIndex1);
+    // streamIndex2 += taPositionAlloc->AssignStreams(streamIndex2);
+    // streamIndex3 += taPositionAlloc->AssignStreams(streamIndex3);
+    // streamIndex4 += taPositionAlloc->AssignStreams(streamIndex4);
+
+    // std::stringstream ssSpeed;
+    // ssSpeed << "ns3::UniformRandomVariable[Min=0.0|Max=" << nodeSpeed << "]";
+    // std::stringstream ssPause;
+    // ssPause << "ns3::ConstantRandomVariable[Constant=" << nodePause << "]";
+    // mobilityAdhoc.SetMobilityModel("ns3::RandomWaypointMobilityModel",
+    //                                "Speed", StringValue(ssSpeed.str()),
+    //                                "Pause", StringValue(ssPause.str()),
+    //                                "PositionAllocator", PointerValue(taPositionAlloc));
+    // mobilityAdhoc.SetPositionAllocator(taPositionAlloc);
+
+    // mobilityAdhoc.Install(leftNodes);
+    // mobilityAdhoc.Install(rightNodes);
+
+    // mobilityAdhoc.Install(leftAp);
+    // mobilityAdhoc.Install(rightAp);
+
+    // streamIndex1 += mobilityAdhoc.AssignStreams(leftNodes, streamIndex1);
+    // streamIndex2 += mobilityAdhoc.AssignStreams(rightNodes, streamIndex2);
+    // streamIndex3 += mobilityAdhoc.AssignStreams(leftAp, streamIndex3);
+    // streamIndex4 += mobilityAdhoc.AssignStreams(rightAp, streamIndex4);
+    // NS_UNUSED(streamIndex1); // From this point, streamIndex is unused
+    // NS_UNUSED(streamIndex2); // From this point, streamIndex is unused
+    // NS_UNUSED(streamIndex3); // From this point, streamIndex is unused
+    // NS_UNUSED(streamIndex4); // From this point, streamIndex is unused
+
+    //     mobility.Install(leftNodes);
+    // mobility.Install(rightNodes);
+
+    // mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    // mobility.Install(rightAp);
+    // mobility.Install(leftAp);
 
     // TODO implement constantvelocityspeedmodel
     // mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
@@ -191,7 +245,7 @@ int main(int argc, char *argv[])
     /* Internet Stack */
     InternetStackHelper stack;
     // stack.Install(p2pNodes);
-    stack.Install(csmaNodes); // TODO check
+    // stack.Install(csmaNodes); // TODO delete
     stack.Install(leftAp);
     stack.Install(leftNodes);
     stack.Install(rightAp);
@@ -224,51 +278,103 @@ int main(int argc, char *argv[])
     Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
     em->SetAttribute("ErrorRate", DoubleValue(0.00001));
     p2pDevices.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-    for (int i = 0; i < no_of_flow; i++)
+    for (int i = 0; i < nflows; i++)
     {
         PacketSinkHelper sinkHelper("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), 9 + i));
         ApplicationContainer sinkApp = sinkHelper.Install(leftNodes.Get(i));
         sink = StaticCast<PacketSink>(sinkApp.Get(0));
 
         /* Install TCP/UDP Transmitter on the station */
-        OnOffHelper server("ns3::TcpSocketFactory", (InetSocketAddress(staInterface.GetAddress(i), 9 + i)));
+        OnOffHelper server("ns3::TcpSocketFactory", (InetSocketAddress(leftStaInterface.GetAddress(i), 9 + i)));
         server.SetAttribute("PacketSize", UintegerValue(payloadSize));
         server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
         server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
         server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
+
+        ApplicationContainer serverApp = server.Install(rightNodes.Get(i));
 
         /* Start Applications */
         sinkApp.Start(Seconds(0.0));
         serverApp.Start(Seconds(1.0));
     }
 
-    Simulator::Schedule(Seconds(1.1), &CalculateThroughput);
+    // Simulator::Schedule(Seconds(1.1), &CalculateThroughput);
 
     /* Flow Monitor */
-    Ptr<FlowMonitor> flowMonitor;
-    FlowMonitorHelper flowHelper;
-    flowMonitor = flowHelper.InstallAll();
+    FlowMonitorHelper flowmon;
+    Ptr<FlowMonitor> monitor = flowmon.InstallAll();
 
-    flowMonitor->CheckForLostPackets();
+    monitor->CheckForLostPackets();
     // Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
     // std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats();
 
     /* Start Simulation */
-    Simulator::Stop(Seconds(simulationTime + 1));
+    Simulator::Stop(Seconds(simulationTime));
     Simulator::Run();
 
-    /* Flow Monitor File  */
-    flowMonitor->SerializeToXmlFile("./highrateSimulation/flowstat.xml", false, false);
+    // step 4: Add below code after Simulator::Run ();
+    ///////////////////////////////////// Network Perfomance Calculation /////////////////////////////////////
 
-    double averageThroughput = ((sink->GetTotalRx() * 8) / (1e6 * simulationTime));
+    int j = 0;
+    float AvgThroughput = 0;
+    Time Jitter;
+    Time Delay;
+
+    Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowmon.GetClassifier());
+    std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
+
+    for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin(); iter != stats.end(); ++iter)
+    {
+        Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(iter->first);
+
+        NS_LOG_UNCOND("----Flow ID:" << iter->first);
+        NS_LOG_UNCOND("Src Addr" << t.sourceAddress << "Dst Addr " << t.destinationAddress);
+        NS_LOG_UNCOND("Sent Packets=" << iter->second.txPackets);
+        NS_LOG_UNCOND("Received Packets =" << iter->second.rxPackets);
+        NS_LOG_UNCOND("Lost Packets =" << iter->second.txPackets - iter->second.rxPackets);
+        NS_LOG_UNCOND("Packet delivery ratio =" << iter->second.rxPackets * 100 / iter->second.txPackets << "%");
+        NS_LOG_UNCOND("Packet loss ratio =" << (iter->second.txPackets - iter->second.rxPackets) * 100 / iter->second.txPackets << "%");
+        NS_LOG_UNCOND("Delay =" << iter->second.delaySum);
+        NS_LOG_UNCOND("Jitter =" << iter->second.jitterSum);
+        NS_LOG_UNCOND("Throughput =" << iter->second.rxBytes * 8.0 / (iter->second.timeLastRxPacket.GetSeconds() - iter->second.timeFirstTxPacket.GetSeconds()) / 1024 << "Kbps");
+
+        SentPackets = SentPackets + (iter->second.txPackets);
+        ReceivedPackets = ReceivedPackets + (iter->second.rxPackets);
+        LostPackets = LostPackets + (iter->second.txPackets - iter->second.rxPackets);
+        AvgThroughput = AvgThroughput + (iter->second.rxBytes * 8.0 / (iter->second.timeLastRxPacket.GetSeconds() - iter->second.timeFirstTxPacket.GetSeconds()) / 1024);
+        Delay = Delay + (iter->second.delaySum);
+        Jitter = Jitter + (iter->second.jitterSum);
+
+        j = j + 1;
+    }
+
+    AvgThroughput = AvgThroughput / j;
+    NS_LOG_UNCOND("--------Total Results of the simulation----------" << std::endl);
+    NS_LOG_UNCOND("Total sent packets  =" << SentPackets);
+    NS_LOG_UNCOND("Total Received Packets =" << ReceivedPackets);
+    NS_LOG_UNCOND("Total Lost Packets =" << LostPackets);
+    NS_LOG_UNCOND("Packet Loss ratio =" << ((LostPackets * 100) / SentPackets) << "%");
+    NS_LOG_UNCOND("Packet delivery ratio =" << ((ReceivedPackets * 100) / SentPackets) << "%");
+    NS_LOG_UNCOND("Average Throughput =" << AvgThroughput << "Kbps");
+    NS_LOG_UNCOND("End to End Delay =" << Delay);
+    NS_LOG_UNCOND("End to End Jitter delay =" << Jitter);
+    NS_LOG_UNCOND("Total Flod id " << j);
+    monitor->SerializeToXmlFile("wormhole.xml", true, true);
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /* Flow Monitor File  */
+    // flowMonitor->SerializeToXmlFile("./highrateSimulation/flowstat.xml", false, false);
+
+    // double averageThroughput = ((sink->GetTotalRx() * 8) / (1e6 * simulationTime));
 
     Simulator::Destroy();
 
-    if (averageThroughput < 50)
-    {
-        NS_LOG_ERROR("Obtained throughput is not in the expected boundaries!");
-        exit(1);
-    }
-    std::cout << "\nAverage throughput: " << averageThroughput << " Mbit/s" << std::endl;
+    // if (averageThroughput < 50)
+    // {
+    //     NS_LOG_ERROR("Obtained throughput is not in the expected boundaries!");
+    //     exit(1);
+    // }
+    // std::cout << "\nAverage throughput: " << averageThroughput << " Mbit/s" << std::endl;
     return 0;
 }
