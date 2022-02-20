@@ -58,12 +58,9 @@ void CalculateThroughput()
 
 int main(int argc, char *argv[])
 {
-    // bool verbose = true;
-    // uint32_t nCsma = 10; //TODO delete
     uint32_t nWifi = 10;
     int no_of_flow = 10;
     uint32_t packets = 2;
-    // bool pcapTracing = false; // TODO delete
 
     uint32_t payloadSize = 1024;           /* Transport layer payload size in bytes. */
     std::string dataRate = "100Mbps";      /* Application layer datarate. */
@@ -72,7 +69,6 @@ int main(int argc, char *argv[])
     double simulationTime = 2;             /* Simulation time in seconds. */
 
     CommandLine cmd(__FILE__);
-    // cmd.AddValue("nCsma", "Number of \"extra\" CSMA nodes/devices", nCsma); // TODO delete
     cmd.AddValue("nWifi", "Number of wifi STA devices", nWifi);
     cmd.AddValue("no_of_flow", "Number of flow", no_of_flow);
     cmd.AddValue("payloadSize", "Payload size in bytes", payloadSize);
@@ -116,17 +112,6 @@ int main(int argc, char *argv[])
     NetDeviceContainer p2pDevices;
     p2pDevices = pointToPoint.Install(p2pNodes);
 
-    // NodeContainer csmaNodes;
-    // csmaNodes.Add(p2pNodes.Get(1));
-    // csmaNodes.Create(nCsma);
-
-    // CsmaHelper csma;
-    // csma.SetChannelAttribute("DataRate", StringValue("100Mbps"));
-    // csma.SetChannelAttribute("Delay", TimeValue(NanoSeconds(6560)));
-
-    // NetDeviceContainer csmaDevices;
-    // csmaDevices = csma.Install(csmaNodes); //TODO delete
-
     /**
      * @brief from here
      */
@@ -139,8 +124,6 @@ int main(int argc, char *argv[])
 
     YansWifiChannelHelper leftWifiChannel = YansWifiChannelHelper::Default();
     YansWifiChannelHelper rightWifiChannel = YansWifiChannelHelper::Default();
-    // wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel"); // TODO delete
-    // wifiChannel.AddPropagationLoss("ns3::FrissPropagationLossModel", "Frequency", DoubleValue(5e9)); // TODO delete
 
     YansWifiPhyHelper leftWifiPhy;
     YansWifiPhyHelper rightWifiPhy;
@@ -148,7 +131,6 @@ int main(int argc, char *argv[])
     rightWifiPhy.SetChannel(rightWifiChannel.Create());
     leftWifiPhy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
     rightWifiPhy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
-    // wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel"); // TODO delete
 
     WifiHelper leftWifiHelper;
     WifiHelper rightWifiHelper;
@@ -201,7 +183,7 @@ int main(int argc, char *argv[])
     mobility.Install(leftAp);
     mobility.Install(rightAp);
 
-    // TODO delete
+    // TODO implement constantvelocityspeedmodel
     // mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     // mobility.Install(apWifiNode);
     // mobility.Install(staWifiNodes);
@@ -244,8 +226,6 @@ int main(int argc, char *argv[])
     p2pDevices.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
     for (int i = 0; i < no_of_flow; i++)
     {
-        // TODO delete csmaDevices.Get(i + 1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-
         PacketSinkHelper sinkHelper("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), 9 + i));
         ApplicationContainer sinkApp = sinkHelper.Install(leftNodes.Get(i));
         sink = StaticCast<PacketSink>(sinkApp.Get(0));
@@ -256,7 +236,6 @@ int main(int argc, char *argv[])
         server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
         server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
         server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
-        // TODO delete ApplicationContainer serverApp = server.Install(csmaNodes.Get(i + 1)); // server node assign
 
         /* Start Applications */
         sinkApp.Start(Seconds(0.0));
