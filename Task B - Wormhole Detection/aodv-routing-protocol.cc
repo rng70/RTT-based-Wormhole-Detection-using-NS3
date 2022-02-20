@@ -1489,7 +1489,7 @@ namespace ns3
               Ptr<NetDevice> dev = m_ipv4->GetNetDevice(m_ipv4->GetInterfaceForAddress(receiver));
               RoutingTableEntry falseToDst(dev, dst, true, rreqHeader.GetDstSeqno() + 100, m_ipv4->GetAddress(m_ipv4->GetInterfaceForAddress(receiver), 0), 1, dst, m_activeRouteTimeout);
 
-              SendReplyByIntermediateNode(falseToDst, toOrigin, rreqHeader.GetGratutiousRrep());
+              SendReplyByIntermediateNode(falseToDst, toOrigin, rreqHeader.GetGratuitousRrep());
               return;
             }
             /* Code for Blackhole Attack Simulation ends here */
