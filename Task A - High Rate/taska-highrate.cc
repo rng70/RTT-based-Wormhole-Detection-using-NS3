@@ -39,7 +39,7 @@
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("TaskAHighRate");
+NS_LOG_COMPONENT_DEFINE("Task_A_High_Rate");
 
 std::ofstream throughput("./highrateSimulation/throughput.txt");
 Ptr<PacketSink> sink;     /* Pointer to the packet sink application */
@@ -60,10 +60,10 @@ int main(int argc, char *argv[])
     /**
      * @brief variable section
     //  */
-    // int nodeSpeed = 10;                    /* Speed of nodes in m/s */
+    int nodeSpeed = 10; /* Speed of nodes in m/s */
     // int nodePause = 0;                     /* Pause time in s */
     int nflows = 10;                       /* Number of flow */
-    uint32_t nWifi = 5;                    /* Number of nodes */
+    uint32_t nWifi = 50;                   /* Number of nodes */
     uint32_t nPackets = 2;                 /* Number of packets send per second */
     uint32_t payloadSize = 1024;           /* Transport layer payload size in bytes. */
     std::string dataRate = "4Mbps";        /* Application layer datarate. */
@@ -126,9 +126,9 @@ int main(int argc, char *argv[])
     /**
      * @brief from here
      */
-    NodeContainer leftNodes, rightNodes;
-    leftNodes.Create(nWifi);
-    rightNodes.Create(nWifi);
+    NodeContainer leftStaNodes, rightStaNodes;
+    leftStaNodes.Create(nWifi);
+    rightStaNodes.Create(nWifi);
 
     NodeContainer leftAp = p2pNodes.Get(0);
     NodeContainer rightAp = p2pNodes.Get(1);
@@ -164,8 +164,8 @@ int main(int argc, char *argv[])
 
     NetDeviceContainer leftStaDevices;
     NetDeviceContainer rightStaDevices;
-    leftStaDevices = leftWifiHelper.Install(leftWifiPhy, leftWifiMac, leftNodes);
-    rightStaDevices = rightWifiHelper.Install(rightWifiPhy, rightWifiMac, rightNodes);
+    leftStaDevices = leftWifiHelper.Install(leftWifiPhy, leftWifiMac, leftStaNodes);
+    rightStaDevices = rightWifiHelper.Install(rightWifiPhy, rightWifiMac, rightStaNodes);
 
     /* Configure AP */
     leftWifiMac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
@@ -176,15 +176,34 @@ int main(int argc, char *argv[])
     rightApDevice = rightWifiHelper.Install(rightWifiPhy, rightWifiMac, rightAp);
 
     /*  Mobility Model */
-    // MobilityHelper mobility;
+    MobilityHelper mobility;
 
-    // mobility.SetPositionAllocator("ns3::GridPositionAllocator",
-    //                               "MinX", DoubleValue(0.0),
-    //                               "MinY", DoubleValue(0.0),
-    //                               "DeltaX", DoubleValue(5.0),
-    //                               "DeltaY", DoubleValue(10.0),
-    //                               "GridWidth", UintegerValue(3),
-    //                               "LayoutType", StringValue("RowFirst"));
+    mobility.SetPositionAllocator("ns3::GridPositionAllocator",
+                                  "MinX", DoubleValue(0.0),
+                                  "MinY", DoubleValue(0.0),
+                                  "DeltaX", DoubleValue(0.5),
+                                  "DeltaY", DoubleValue(1.0),
+                                  "GridWidth", UintegerValue(3),
+                                  "LayoutType", StringValue("RowFirst"));
+
+    mobility.SetMobilityModel("ns3::ConstantVelocityMobilityModel");
+    mobility.Install(leftStaNodes);
+    mobility.Install(rightStaNodes);
+    for (uint n = 0; n < leftStaNodes.GetN(); n++)
+    {
+        Ptr<ConstantVelocityMobilityModel> mob = leftStaNodes.Get(n)->GetObject<ConstantVelocityMobilityModel>();
+        mob->SetVelocity(Vector(nodeSpeed, 0, 0));
+    }
+
+    for (uint n = 0; n < rightStaNodes.GetN(); n++)
+    {
+        Ptr<ConstantVelocityMobilityModel> mob = rightStaNodes.Get(n)->GetObject<ConstantVelocityMobilityModel>();
+        mob->SetVelocity(Vector(nodeSpeed, 0, 0));
+    }
+
+    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    mobility.Install(leftAp);
+    mobility.Install(rightAp);
 
     // mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel", "Bounds", RectangleValue(Rectangle(-100, 100, -100, 100)));
 
@@ -245,11 +264,10 @@ int main(int argc, char *argv[])
     /* Internet Stack */
     InternetStackHelper stack;
     // stack.Install(p2pNodes);
-    // stack.Install(csmaNodes); // TODO delete
     stack.Install(leftAp);
-    stack.Install(leftNodes);
+    stack.Install(leftStaNodes);
     stack.Install(rightAp);
-    stack.Install(rightNodes);
+    stack.Install(rightStaNodes);
 
     Ipv4AddressHelper address;
     address.SetBase("10.1.1.0", "255.255.255.0");
@@ -278,10 +296,17 @@ int main(int argc, char *argv[])
     Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
     em->SetAttribute("ErrorRate", DoubleValue(0.00001));
     p2pDevices.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+    // p2pDevices.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+    p2pDevices.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+
+    // after wifi netdevices are created
+    Config::Set("/NodeList/1/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PostReceptionErrorModel", PointerValue(em));
+    Config::Set("/NodeList/2/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PostReceptionErrorModel", PointerValue(em));
+    Config::Set("/NodeList/3/DeviceList/0/$ns3::WifiNetDevice/Phy/$ns3::YansWifiPhy/PostReceptionErrorModel", PointerValue(em));
     for (int i = 0; i < nflows; i++)
     {
         PacketSinkHelper sinkHelper("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), 9 + i));
-        ApplicationContainer sinkApp = sinkHelper.Install(leftNodes.Get(i));
+        ApplicationContainer sinkApp = sinkHelper.Install(leftStaNodes.Get(i));
         sink = StaticCast<PacketSink>(sinkApp.Get(0));
 
         /* Install TCP/UDP Transmitter on the station */
@@ -291,7 +316,7 @@ int main(int argc, char *argv[])
         server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
         server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
 
-        ApplicationContainer serverApp = server.Install(rightNodes.Get(i));
+        ApplicationContainer serverApp = server.Install(rightStaNodes.Get(i));
 
         /* Start Applications */
         sinkApp.Start(Seconds(0.0));
@@ -303,7 +328,6 @@ int main(int argc, char *argv[])
     /* Flow Monitor */
     FlowMonitorHelper flowmon;
     Ptr<FlowMonitor> monitor = flowmon.InstallAll();
-
     monitor->CheckForLostPackets();
     // Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
     // std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats();
