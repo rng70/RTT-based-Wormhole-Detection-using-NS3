@@ -177,11 +177,11 @@ namespace ns3
        * @brief method set by rng70
        * for wormhole simulation
        */
-      void SetMaliciousEnable(boo f)
+      void SetMaliciousEnable(bool f)
       {
         IsMalicious = f;
       }
-      void GetMaliciousEnable() const
+      bool GetMaliciousEnable() const
       {
         return IsMalicious;
       }
