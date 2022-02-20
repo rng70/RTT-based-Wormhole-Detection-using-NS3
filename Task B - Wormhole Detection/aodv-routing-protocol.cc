@@ -1102,7 +1102,7 @@ RoutingProtocol::SendRequest (Ipv4Address dst)
   rreqHeader.SetOriginSeqno (m_seqNo);
   m_requestId++;
   rreqHeader.SetId (m_requestId);
-  // rreqHeader.SetHopCount(0); //TODO check if it is necessary
+  rreqHeader.SetHopCount(0); //TODO check if it is necessary
 
   // Send RREQ as subnet directed broadcast from each interface used by aodv
   for (std::map<Ptr<Socket>, Ipv4InterfaceAddress>::const_iterator j =
@@ -1353,6 +1353,27 @@ RoutingProtocol::RecvRequest (Ptr<Packet> p, Ipv4Address receiver, Ipv4Address s
   if (!m_routingTable.LookupRoute (origin, toOrigin))
     {
       Ptr<NetDevice> dev = m_ipv4->GetNetDevice (m_ipv4->GetInterfaceForAddress (receiver));
+
+      /**
+       * @brief code added by rng70 //TODO Check
+       */ 
+            if(EnableWrmAttack && (src==FirstEndOfWormTunnel))
+            {
+                // cout<<"ENTER IN THE ATTACK WRM2";
+                dev = m_ipv4->GetNetDevice (m_ipv4->GetInterfaceForAddress (SecondEndOfWormTunnel));
+                receiver=SecondEndOfWormTunnel;
+            }
+            else if(EnableWrmAttack && (src==SecondEndOfWormTunnel))
+            {
+              // cout<<"ENTER IN THE ATTACK WRM1";
+                dev = m_ipv4->GetNetDevice (m_ipv4->GetInterfaceForAddress (FirstEndOfWormTunnel));
+                receiver=FirstEndOfWormTunnel;
+            }
+            else
+              dev = m_ipv4->GetNetDevice (m_ipv4->GetInterfaceForAddress (receiver));
+
+              // TODO check till this line
+
       RoutingTableEntry newEntry (/*device=*/ dev, /*dst=*/ origin, /*validSeno=*/ true, /*seqNo=*/ rreqHeader.GetOriginSeqno (),
                                               /*iface=*/ m_ipv4->GetAddress (m_ipv4->GetInterfaceForAddress (receiver), 0), /*hops=*/ hop,
                                               /*nextHop*/ src, /*timeLife=*/ Time ((2 * m_netTraversalTime - 2 * hop * m_nodeTraversalTime)));
@@ -1426,34 +1447,51 @@ RoutingProtocol::RecvRequest (Ptr<Packet> p, Ipv4Address receiver, Ipv4Address s
    */
   RoutingTableEntry toDst;
   Ipv4Address dst = rreqHeader.GetDst ();
-  if (m_routingTable.LookupRoute (dst, toDst))
+  if (IsMalicious || m_routingTable.LookupRoute(dst, toDst)) // TODO check
+  {
+    /*
+     * Drop RREQ, This node RREP will make a loop.
+     */
+    if (toDst.GetNextHop() == src)
     {
-      /*
-       * Drop RREQ, This node RREP will make a loop.
-       */
-      if (toDst.GetNextHop () == src)
+      NS_LOG_DEBUG("Drop RREQ from " << src << ", dest next hop " << toDst.GetNextHop());
+      return;
+    }
+    /*
+     * The Destination Sequence number for the requested destination is set to the maximum of the corresponding value
+     * received in the RREQ message, and the destination sequence value currently maintained by the node for the requested destination.
+     * However, the forwarding node MUST NOT modify its maintained value for the destination sequence number, even if the value
+     * received in the incoming RREQ is larger than the value currently maintained by the forwarding node.
+     */
+    if (IsMalicious || ((rreqHeader.GetUnknownSeqno() || (int32_t(toDst.GetSeqNo()) - int32_t(rreqHeader.GetDstSeqno()) >= 0)) && toDst.GetValidSeqNo())) //TODO check
+    {
+      if (IsMalicious || (!rreqHeader.GetDestinationOnly() && toDst.GetFlag() == VALID)) //TODO check
+      {
+        m_routingTable.LookupRoute(origin, toOrigin);
+
+        // TODO check start here
+        /* Code added by Shalini Satre, Wireless Information Networking Group (WiNG), NITK Surathkal for simulating Blackhole Attack
+        * If node is malicious, it creates false routing table entry having sequence number much higher than
+        * that in RREQ message and hop count as 1.
+        * Malicious node itself sends the RREP message,
+        * so that the route will be established through malicious node.
+        */
+        if(IsMalicious)
         {
-          NS_LOG_DEBUG ("Drop RREQ from " << src << ", dest next hop " << toDst.GetNextHop ());
-          return;
+          Ptr<NetDevice> dev = m_ipv4->GetNetDevice (m_ipv4->GetInterfaceForAddress (receiver));
+          RoutingTableEntry falseToDst(dev,dst,true,rreqHeader.GetDstSeqno()+100,m_ipv4->GetAddress (m_ipv4->GetInterfaceForAddress (receiver),0),1,dst,m_activeRouteTimeout);
+          
+          SendReplyByIntermediateNode (falseToDst, toOrigin, rreqHeader.GetGratiousRrep ());
+            return;
         }
-      /*
-       * The Destination Sequence number for the requested destination is set to the maximum of the corresponding value
-       * received in the RREQ message, and the destination sequence value currently maintained by the node for the requested destination.
-       * However, the forwarding node MUST NOT modify its maintained value for the destination sequence number, even if the value
-       * received in the incoming RREQ is larger than the value currently maintained by the forwarding node.
-       */
-      if ((rreqHeader.GetUnknownSeqno () || (int32_t (toDst.GetSeqNo ()) - int32_t (rreqHeader.GetDstSeqno ()) >= 0))
-          && toDst.GetValidSeqNo () )
-        {
-          if (!rreqHeader.GetDestinationOnly () && toDst.GetFlag () == VALID)
-            {
-              m_routingTable.LookupRoute (origin, toOrigin);
-              SendReplyByIntermediateNode (toDst, toOrigin, rreqHeader.GetGratuitousRrep ());
-              return;
-            }
-          rreqHeader.SetDstSeqno (toDst.GetSeqNo ());
-          rreqHeader.SetUnknownSeqno (false);
-        }
+        /* Code for Blackhole Attack Simulation ends here */
+        //TODO check ends here
+        SendReplyByIntermediateNode(toDst, toOrigin, rreqHeader.GetGratuitousRrep());
+        return;
+      }
+      rreqHeader.SetDstSeqno(toDst.GetSeqNo());
+      rreqHeader.SetUnknownSeqno(false);
+    }
     }
 
   SocketIpTtlTag tag;
@@ -1527,6 +1565,11 @@ RoutingProtocol::SendReplyByIntermediateNode (RoutingTableEntry & toDst, Routing
   /* If the node we received a RREQ for is a neighbor we are
    * probably facing a unidirectional link... Better request a RREP-ack
    */
+  // TODO check
+  /// attract node to set up path through malicious node
+  if(IsMalicious){
+    rrepHeader.SetHopCount(1); //TODO check ---- //TODO check
+  }
   if (toDst.GetHop () == 1)
     {
       rrepHeader.SetAckRequired (true);
@@ -1764,11 +1807,36 @@ RoutingProtocol::ProcessHello (RrepHeader const & rrepHeader, Ipv4Address receiv
       toNeighbor.SetSeqNo (rrepHeader.GetDstSeqno ());
       toNeighbor.SetValidSeqNo (true);
       toNeighbor.SetFlag (VALID);
-      toNeighbor.SetOutputDevice (m_ipv4->GetNetDevice (m_ipv4->GetInterfaceForAddress (receiver)));
-      toNeighbor.SetInterface (m_ipv4->GetAddress (m_ipv4->GetInterfaceForAddress (receiver), 0));
-      toNeighbor.SetHop (1);
-      toNeighbor.SetNextHop (rrepHeader.GetDst ());
-      m_routingTable.Update (toNeighbor);
+
+      /**
+       * @brief code added by rng70
+       * //TODO check
+       */
+      IpvAddress wrmDst = rrepHeader.GetDst();
+      if(EnableWrmAttack && wrmDst==FirstEndOfWormTunnel){
+        // cout<<"RREP Helper Contains First End P2P interface Address";
+        toNeighbor.SetOutputDevice(m_ipv4->GetNetDevice(m_ipv4->GetInterfaceForAddress(SecondEndOfWormTunnel)));
+        toNeighbor.SetInterface(m_ipv4->GetAddress(m_ipv4->GetInterfaceForAddress(SecondEndOfWormTunnel), 0));
+        toNeighbor.SetHop(1);
+        toNeighbor.SetNextHop(rrepHeader.GetDst());
+      }
+      else if (EnableWrmAttack && wrmDst == SecondEndOfWormTunnel)
+      {
+        // cout<<"RREP Helper Contains Second End P2P interface Address";
+        toNeighbor.SetOutputDevice(m_ipv4->GetNetDevice(m_ipv4->GetInterfaceForAddress(FirstEndOfWormTunnel)));
+        toNeighbor.SetInterface(m_ipv4->GetAddress(m_ipv4->GetInterfaceForAddress(FirstEndOfWormTunnel), 0));
+        toNeighbor.SetHop(1);
+        toNeighbor.SetNextHop(rrepHeader.GetDst());
+      }
+      else{
+        toNeighbor.SetOutputDevice(m_ipv4->GetNetDevice(m_ipv4->GetInterfaceForAddress(receiver)));
+        toNeighbor.SetInterface (m_ipv4->GetAddress (m_ipv4->GetInterfaceForAddress (receiver), 0));
+        toNeighbor.SetHop (1);
+        toNeighbor.SetNextHop (rrepHeader.GetDst ());
+      }
+
+      //TODO check until here
+      m_routingTable.Update(toNeighbor);
     }
   if (m_enableHello)
     {
