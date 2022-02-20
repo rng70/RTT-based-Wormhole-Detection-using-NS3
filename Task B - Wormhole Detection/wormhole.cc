@@ -199,9 +199,13 @@ void wormhole(int param_count, char *param_list[])
     }
 
     monitor->SerializeToXmlFile("lab-4.flowmon", true, true);
+
+    Simulator::Destroy();
 }
 
 int main(int argc, char *argv[])
 {
     wormhole(argc, argv);
+
+    return 0;
 }
