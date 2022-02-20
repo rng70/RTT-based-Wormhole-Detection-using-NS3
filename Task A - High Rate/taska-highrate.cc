@@ -36,7 +36,6 @@
 // n5   n6   n7   n0 -------------- n1   n2   n3   n4
 //                   point-to-point  |    |    |    |
 //                                   *    *    *    *
-//                                   AP
 //                                     wifi 10.1.2.0
 
 using namespace ns3;
@@ -60,19 +59,20 @@ void CalculateThroughput()
 int main(int argc, char *argv[])
 {
     // bool verbose = true;
-    uint32_t nCsma = 3;
-    uint32_t nWifi = 3;
-    int no_of_flow = 3;
+    // uint32_t nCsma = 10; //TODO delete
+    uint32_t nWifi = 10;
+    int no_of_flow = 10;
+    uint32_t packets = 2;
     // bool pcapTracing = false; // TODO delete
 
-    uint32_t payloadSize = 1472;           /* Transport layer payload size in bytes. */
+    uint32_t payloadSize = 1024;           /* Transport layer payload size in bytes. */
     std::string dataRate = "100Mbps";      /* Application layer datarate. */
     std::string tcpVariant = "TcpNewReno"; /* TCP variant type. */
     std::string phyRate = "HtMcs7";        /* Physical layer bitrate. */
-    double simulationTime = 10;            /* Simulation time in seconds. */
+    double simulationTime = 2;             /* Simulation time in seconds. */
 
     CommandLine cmd(__FILE__);
-    cmd.AddValue("nCsma", "Number of \"extra\" CSMA nodes/devices", nCsma);
+    // cmd.AddValue("nCsma", "Number of \"extra\" CSMA nodes/devices", nCsma); // TODO delete
     cmd.AddValue("nWifi", "Number of wifi STA devices", nWifi);
     cmd.AddValue("no_of_flow", "Number of flow", no_of_flow);
     cmd.AddValue("payloadSize", "Payload size in bytes", payloadSize);
@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
                                "TcpBic, TcpYeah, TcpIllinois, TcpWestwood, TcpWestwoodPlus, TcpLedbat ",
                  tcpVariant);
     cmd.AddValue("phyRate", "Physical layer bitrate", phyRate);
-    // cmd.AddValue("pcap", "Enable/disable PCAP tracing", pcapTracing); // TODO delete
+    cmd.AddValue("numPackets", "Total number of packets", packets);
     cmd.AddValue("simulationTime", "Simulation time in seconds", simulationTime);
     cmd.Parse(argc, argv);
 
@@ -111,62 +111,76 @@ int main(int argc, char *argv[])
     PointToPointHelper pointToPoint;
     pointToPoint.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
     pointToPoint.SetChannelAttribute("Delay", StringValue("10ms"));
-    pointToPoint.SetQueue("ns3::DropTailQueue");
+    // pointToPoint.SetQueue("ns3::DropTailQueue"); //TODO delete
 
     NetDeviceContainer p2pDevices;
     p2pDevices = pointToPoint.Install(p2pNodes);
 
-    NodeContainer csmaNodes;
-    csmaNodes.Add(p2pNodes.Get(1));
-    csmaNodes.Create(nCsma);
+    // NodeContainer csmaNodes;
+    // csmaNodes.Add(p2pNodes.Get(1));
+    // csmaNodes.Create(nCsma);
 
-    CsmaHelper csma;
-    csma.SetChannelAttribute("DataRate", StringValue("100Mbps"));
-    csma.SetChannelAttribute("Delay", TimeValue(NanoSeconds(6560)));
+    // CsmaHelper csma;
+    // csma.SetChannelAttribute("DataRate", StringValue("100Mbps"));
+    // csma.SetChannelAttribute("Delay", TimeValue(NanoSeconds(6560)));
 
-    NetDeviceContainer csmaDevices;
-    csmaDevices = csma.Install(csmaNodes);
+    // NetDeviceContainer csmaDevices;
+    // csmaDevices = csma.Install(csmaNodes); //TODO delete
 
     /**
      * @brief from here
      */
-    NodeContainer staWifiNodes;
-    staWifiNodes.Create(nWifi);
+    NodeContainer leftNodes, rightNodes;
+    leftNodes.Create(nWifi / 2);
+    rightNodes.Create(nWifi / 2);
 
-    NodeContainer apWifiNode = p2pNodes.Get(0);
+    NodeContainer leftAp = p2pNodes.Get(0);
+    NodeContainer rightAp = p2pNodes.Get(1);
 
-    YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
+    YansWifiChannelHelper leftWifiChannel = YansWifiChannelHelper::Default();
+    YansWifiChannelHelper rightWifiChannel = YansWifiChannelHelper::Default();
     // wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel"); // TODO delete
     // wifiChannel.AddPropagationLoss("ns3::FrissPropagationLossModel", "Frequency", DoubleValue(5e9)); // TODO delete
 
-    YansWifiPhyHelper wifiPhy;
-    wifiPhy.SetChannel(wifiChannel.Create());
-    wifiPhy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
+    YansWifiPhyHelper leftWifiPhy;
+    YansWifiPhyHelper rightWifiPhy;
+    leftWifiPhy.SetChannel(leftWifiChannel.Create());
+    rightWifiPhy.SetChannel(rightWifiChannel.Create());
+    leftWifiPhy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
+    rightWifiPhy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
     // wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel"); // TODO delete
 
-    WifiHelper wifiHelper;
-    wifiHelper.SetRemoteStationManager("ns3::AarfWifiManager");
+    WifiHelper leftWifiHelper;
+    WifiHelper rightWifiHelper;
+    leftWifiHelper.SetRemoteStationManager("ns3::AarfWifiManager");
+    rightWifiHelper.SetRemoteStationManager("ns3::AarfWifiManager");
     // wifiHelper.SetStandard ("WIFI_STANDARD_80211n_5GHZ"); //TODO delete
     // wifiHelper.SetRemoteStationManager("ns3::ConstantRateWifiManager",
     //                                    "DataMode", StringValue(phyRate),
     //                                    "ControlMode", StringValue("HtMcs0")); // TODO delete
 
-    WifiMacHelper wifiMac;
+    WifiMacHelper leftWifiMac;
+    WifiMacHelper rightWifiMac;
 
     /* Configure STA */
     Ssid ssid = Ssid("network");
-    wifiMac.SetType("ns3::StaWifiMac",
-                    "Ssid", SsidValue(ssid), "ActiveProbing", BooleanValue(false)); // TODO check
+    leftWifiMac.SetType("ns3::StaWifiMac",
+                        "Ssid", SsidValue(ssid), "ActiveProbing", BooleanValue(false)); // TODO check
+    rightWifiMac.SetType("ns3::StaWifiMac",
+                         "Ssid", SsidValue(ssid), "ActiveProbing", BooleanValue(false)); // TODO check
 
-    NetDeviceContainer staDevices;
-    staDevices = wifiHelper.Install(wifiPhy, wifiMac, staWifiNodes);
+    NetDeviceContainer leftStaDevices;
+    NetDeviceContainer rightStaDevices;
+    leftStaDevices = leftWifiHelper.Install(leftWifiPhy, leftWifiMac, leftNodes);
+    githStaDevices = rightWifiHelper.Install(rightWifiPhy, rightWifiMac, rightNodes);
 
     /* Configure AP */
-    wifiMac.SetType("ns3::ApWifiMac",
-                    "Ssid", SsidValue(ssid));
+    leftWifiMac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+    rightWifiMac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
 
-    NetDeviceContainer apDevices;
-    apDevices = wifiHelper.Install(wifiPhy, wifiMac, apWifiNode);
+    NetDeviceContainer leftApDevice, rightApDevice;
+    leftApDevice = leftWifiHelper.Install(leftWifiPhy, leftWifiMac, leftAp);
+    rightApDevice = rightWifiHelper.Install(rightWifiPhy, rightWifiMac, rightAp);
 
     /*  Mobility Model */
     MobilityHelper mobility;
@@ -181,8 +195,11 @@ int main(int argc, char *argv[])
 
     mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
                               "Bounds", RectangleValue(Rectangle(-50, 50, -50, 50)));
-    mobility.Install(staWifiNodes);
-    mobility.Install(apWifiNode);
+    mobility.Install(leftNodes);
+    mobility.Install(rightNodes);
+
+    mobility.Install(leftAp);
+    mobility.Install(rightAp);
 
     // TODO delete
     // mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
@@ -193,24 +210,30 @@ int main(int argc, char *argv[])
     InternetStackHelper stack;
     // stack.Install(p2pNodes);
     stack.Install(csmaNodes); // TODO check
-    stack.Install(apWifiNode);
-    stack.Install(staWifiNodes);
+    stack.Install(leftAp);
+    stack.Install(leftNodes);
+    stack.Install(rightAp);
+    stack.Install(rightNodes);
 
     Ipv4AddressHelper address;
     address.SetBase("10.1.1.0", "255.255.255.0");
 
     Ipv4InterfaceContainer p2pInterfaces;
     p2pInterfaces = address.Assign(p2pDevices);
+
     address.SetBase("10.1.2.0", "255.255.255.0");
 
-    Ipv4InterfaceContainer csmaInterfaces;
-    csmaInterfaces = address.Assign(csmaDevices);
+    Ipv4InterfaceContainer leftApInterface;
+    leftApInterface = address.Assign(leftApDevice);
+    Ipv4InterfaceContainer leftStaInterface;
+    leftStaInterface = address.Assign(leftStaDevices);
+
     address.SetBase("10.1.3.0", "255.255.255.0");
 
-    Ipv4InterfaceContainer apInterface;
-    apInterface = address.Assign(apDevices);
-    Ipv4InterfaceContainer staInterface;
-    staInterface = address.Assign(staDevices);
+    Ipv4InterfaceContainer rightApInterface;
+    rightApInterface = address.Assign(rightApDevice);
+    Ipv4InterfaceContainer rightStaInterface;
+    rightStaInterface = address.Assign(rightStaDevices);
 
     /* Populate routing table */
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
@@ -218,12 +241,13 @@ int main(int argc, char *argv[])
     /* Install TCP Receiver on the access point */
     Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
     em->SetAttribute("ErrorRate", DoubleValue(0.00001));
+    p2pDevices.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
     for (int i = 0; i < no_of_flow; i++)
     {
-        csmaDevices.Get(i + 1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+        // TODO delete csmaDevices.Get(i + 1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
 
         PacketSinkHelper sinkHelper("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), 9 + i));
-        ApplicationContainer sinkApp = sinkHelper.Install(staWifiNodes.Get(i));
+        ApplicationContainer sinkApp = sinkHelper.Install(leftNodes.Get(i));
         sink = StaticCast<PacketSink>(sinkApp.Get(0));
 
         /* Install TCP/UDP Transmitter on the station */
@@ -232,7 +256,7 @@ int main(int argc, char *argv[])
         server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
         server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
         server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
-        ApplicationContainer serverApp = server.Install(csmaNodes.Get(i + 1)); // server node assign
+        // TODO delete ApplicationContainer serverApp = server.Install(csmaNodes.Get(i + 1)); // server node assign
 
         /* Start Applications */
         sinkApp.Start(Seconds(0.0));
@@ -247,15 +271,15 @@ int main(int argc, char *argv[])
     flowMonitor = flowHelper.InstallAll();
 
     flowMonitor->CheckForLostPackets();
-    Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
-    std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats();
+    // Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
+    // std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats();
 
     /* Start Simulation */
     Simulator::Stop(Seconds(simulationTime + 1));
     Simulator::Run();
 
     /* Flow Monitor File  */
-    flowMonitor->SerializeToXmlFile("./highrateSimulation/history.flowmonitor", false, false);
+    flowMonitor->SerializeToXmlFile("./highrateSimulation/flowstat.xml", false, false);
 
     double averageThroughput = ((sink->GetTotalRx() * 8) / (1e6 * simulationTime));
 
