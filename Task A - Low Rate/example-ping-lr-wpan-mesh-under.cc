@@ -30,6 +30,12 @@
 //                                     wifi 10.1.2.0
 
 #include <fstream>
+#include "ns3/command-line.h"
+
+#include "ns3/config.h"
+#include "ns3/string.h"
+#include "ns3/log.h"
+
 #include "ns3/core-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/internet-apps-module.h"
@@ -39,18 +45,28 @@
 #include "ns3/sixlowpan-module.h"
 #include "ns3/lr-wpan-module.h"
 #include "ns3/csma-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/ipv6-flow-classifier.h"
+#include "ns3/flow-monitor-helper.h"
+#include "ns3/flow-monitor.h"
+#include "ns3/point-to-point-module.h"
+#include "ns3/traffic-control-module.h"
+#include "ns3/packet-sink.h"
+#include "ns3/packet-sink-helper.h"
+#include "ns3/on-off-helper.h"
+#include <ns3/lr-wpan-error-model.h>
 
 using namespace ns3;
 
+Ptr<PacketSink> sink; /* Pointer to the packet sink application */
+
 int main(int argc, char **argv)
 {
+#pragma GCC diagnostic ignored "-Wunused-variable" // "-Wstringop-overflow"
   bool verbose = false;
-
   /**
    * @brief variable section
   //  */
-  int nodeSpeed = 10; /* Speed of nodes in m/s */
-  // int nodePause = 0;                     /* Pause time in s */
   int nflows = 10;                       /* Number of flow */
   uint32_t nWifi = 50;                   /* Number of nodes */
   uint32_t nPackets = 2;                 /* Number of packets send per second */
@@ -58,7 +74,7 @@ int main(int argc, char **argv)
   std::string dataRate = "4Mbps";        /* Application layer datarate. */
   std::string tcpVariant = "TcpNewReno"; /* TCP variant type. */
   std::string phyRate = "HtMcs7";        /* Physical layer bitrate. */
-  double simulationTime = 20;           /* Simulation time in seconds. */
+  double simulationTime = 20;            /* Simulation time in seconds. */
 
   /* this is for performance management */
   uint32_t SentPackets = 0;
@@ -108,10 +124,7 @@ int main(int argc, char **argv)
   leftNodes.Create(nWifi);
   rightNodes.Create(nWifi);
 
-  NetDeviceContainer
-
-      LrWpanHelper leftlrWpanHelper,
-      rightlrWpanHelper;
+  LrWpanHelper leftlrWpanHelper, rightlrWpanHelper;
   // Add and install the LrWpanNetDevice for each node
   NetDeviceContainer leftlrwpanDevices = leftlrWpanHelper.Install(leftNodes);
   NetDeviceContainer rightlrwpanDevices = rightlrWpanHelper.Install(rightNodes);
@@ -165,21 +178,21 @@ int main(int argc, char **argv)
   p2pInterfaces.SetForwarding(1, true);
   p2pInterfaces.SetDefaultRouteInAllNodes(1);
 
-  uint32_t packetSize = 10;
-  uint32_t maxPacketCount = 5;
+  // uint32_t packetSize = 10;
+  // uint32_t maxPacketCount = 5;
   Time interPacketInterval = Seconds(1.);
-  Ping6Helper ping6;
+  // Ping6Helper ping6;
 
   uint32_t tcp_adu_size = 160;
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(tcp_adu_size));
   for (int i = 0; i < nflows; i++)
   {
-    PacketSinkHelper sinkHelper("ns3::TcpSocketFactory", Inet6SocketAddress(Ipv4Address::GetAny(), 9 + i));
+    PacketSinkHelper sinkHelper("ns3::TcpSocketFactory", Inet6SocketAddress(Ipv6Address::GetAny(), 9 + i));
     ApplicationContainer sinkApp = sinkHelper.Install(leftNodes.Get(i));
     sink = StaticCast<PacketSink>(sinkApp.Get(0));
 
     /* Install TCP/UDP Transmitter on the station */
-    OnOffHelper server("ns3::TcpSocketFactory", (Inet6SocketAddress(leftInterface.GetAddress(i), 9 + i)));
+    OnOffHelper server("ns3::TcpSocketFactory", (Inet6SocketAddress(leftInterfaces.GetAddress(i, 1), 9 + i)));
     server.SetAttribute("PacketSize", UintegerValue(payloadSize));
     server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
@@ -196,8 +209,6 @@ int main(int argc, char **argv)
   FlowMonitorHelper flowmon;
   Ptr<FlowMonitor> monitor = flowmon.InstallAll();
   monitor->CheckForLostPackets();
-  // Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
-  // std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats();
 
   /* Start Simulation */
   Simulator::Stop(Seconds(simulationTime));
@@ -211,15 +222,16 @@ int main(int argc, char **argv)
   Time Jitter;
   Time Delay;
 
-  Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowmon.GetClassifier());
+  Ptr<Ipv6FlowClassifier> classifier = DynamicCast<Ipv6FlowClassifier>(flowmon.GetClassifier());
   std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
+  std::cout << "------------------------------------Stats size = " << stats.size() << std::endl;
 
   for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin(); iter != stats.end(); ++iter)
   {
-    Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(iter->first);
+    // Ipv6FlowClassifier::FiveTuple t = classifier->FindFlow(iter->first);
 
     NS_LOG_UNCOND("----Flow ID:" << iter->first);
-    NS_LOG_UNCOND("Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
+    // NS_LOG_UNCOND("Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
     NS_LOG_UNCOND("Sent Packets=" << iter->second.txPackets);
     NS_LOG_UNCOND("Received Packets =" << iter->second.rxPackets);
     NS_LOG_UNCOND("Lost Packets =" << iter->second.txPackets - iter->second.rxPackets);
@@ -251,7 +263,7 @@ int main(int argc, char **argv)
   NS_LOG_UNCOND("End to End Jitter delay =" << Jitter);
   NS_LOG_UNCOND("Total Flod id " << j);
   monitor->SerializeToXmlFile("lowrate.xml", true, true);
-
+#pragma GCC diagnostic pop
   Simulator::Destroy();
   return 0;
 }
