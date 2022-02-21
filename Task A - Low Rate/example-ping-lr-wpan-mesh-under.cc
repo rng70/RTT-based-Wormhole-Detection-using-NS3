@@ -18,6 +18,17 @@
  * Author: Tommaso Pecorella <tommaso.pecorella@unifi.it>
  */
 
+// Default Network Topology
+//
+//   Wifi 10.1.3.0
+//                 AP
+//  *    *    *    *
+//  |    |    |    |    10.1.1.0
+// n5   n6   n7   n0 -------------- n1   n2   n3   n4
+//                   point-to-point  |    |    |    |
+//                                   *    *    *    *
+//                                     wifi 10.1.2.0
+
 #include <fstream>
 #include "ns3/core-module.h"
 #include "ns3/internet-module.h"
@@ -31,110 +42,216 @@
 
 using namespace ns3;
 
-int main (int argc, char** argv)
+int main(int argc, char **argv)
 {
   bool verbose = false;
 
-  Packet::EnablePrinting ();
+  /**
+   * @brief variable section
+  //  */
+  int nodeSpeed = 10; /* Speed of nodes in m/s */
+  // int nodePause = 0;                     /* Pause time in s */
+  int nflows = 10;                       /* Number of flow */
+  uint32_t nWifi = 50;                   /* Number of nodes */
+  uint32_t nPackets = 2;                 /* Number of packets send per second */
+  uint32_t payloadSize = 1024;           /* Transport layer payload size in bytes. */
+  std::string dataRate = "4Mbps";        /* Application layer datarate. */
+  std::string tcpVariant = "TcpNewReno"; /* TCP variant type. */
+  std::string phyRate = "HtMcs7";        /* Physical layer bitrate. */
+  double simulationTime = 20;           /* Simulation time in seconds. */
 
-  CommandLine cmd (__FILE__);
-  cmd.AddValue ("verbose", "turn on log components", verbose);
-  cmd.Parse (argc, argv);
+  /* this is for performance management */
+  uint32_t SentPackets = 0;
+  uint32_t ReceivedPackets = 0;
+  uint32_t LostPackets = 0;
+  /* variable declaration ends here */
+
+  /* prosessing for cmd persing */
+  CommandLine cmd(__FILE__);
+  cmd.AddValue("nFlows", "Number of flow", nflows);
+  cmd.AddValue("nWifi", "Number of wifi STA devices", nWifi);
+  cmd.AddValue("payloadSize", "Payload size in bytes", payloadSize);
+  cmd.AddValue("dataRate", "Application data ate", dataRate);
+  cmd.AddValue("tcpVariant", "Transport protocol to use: TcpNewReno, TcpHybla, TcpHighSpeed, TcpHtcp, TcpVegas, TcpScalable, TcpVeno, TcpBic, TcpYeah, TcpIllinois, TcpWestwood, TcpWestwoodPlus, TcpLedbat ", tcpVariant);
+  cmd.AddValue("phyRate", "Physical layer bitrate", phyRate);
+  cmd.AddValue("nPackets", "Total number of packets", nPackets);
+  cmd.AddValue("simulationTime", "Simulation time in seconds", simulationTime);
+  cmd.Parse(argc, argv);
+  /* cmd perse ends here */
+
+  Packet::EnablePrinting();
 
   if (verbose)
-    {
-      LogComponentEnable ("Ping6Application", LOG_LEVEL_ALL);
-      LogComponentEnable ("LrWpanMac", LOG_LEVEL_ALL);
-      LogComponentEnable ("LrWpanPhy", LOG_LEVEL_ALL);
-      LogComponentEnable ("LrWpanNetDevice", LOG_LEVEL_ALL);
-      LogComponentEnable ("SixLowPanNetDevice", LOG_LEVEL_ALL);
-    }
+  {
+    LogComponentEnable("Ping6Application", LOG_LEVEL_ALL);
+    LogComponentEnable("LrWpanMac", LOG_LEVEL_ALL);
+    LogComponentEnable("LrWpanPhy", LOG_LEVEL_ALL);
+    LogComponentEnable("LrWpanNetDevice", LOG_LEVEL_ALL);
+    LogComponentEnable("SixLowPanNetDevice", LOG_LEVEL_ALL);
+  }
 
-  uint32_t nWsnNodes = 4;
-  NodeContainer wsnNodes;
-  wsnNodes.Create (nWsnNodes);
+  NodeContainer p2pNodes;
+  p2pNodes.Create(2);
 
-  NodeContainer wiredNodes;
-  wiredNodes.Create (1);
-  wiredNodes.Add (wsnNodes.Get (0));
+  PointToPointHelper pointToPoint;
+  pointToPoint.SetDeviceAttribute("DataRate", StringValue(dataRate));
+  pointToPoint.SetChannelAttribute("Delay", StringValue("10ms"));
 
-  MobilityHelper mobility;
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (0.0),
-                                 "MinY", DoubleValue (0.0),
-                                 "DeltaX", DoubleValue (80),
-                                 "DeltaY", DoubleValue (80),
-                                 "GridWidth", UintegerValue (10),
-                                 "LayoutType", StringValue ("RowFirst"));
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (wsnNodes);
+  NetDeviceContainer p2pDevices;
+  p2pDevices = pointToPoint.Install(p2pNodes);
 
-  LrWpanHelper lrWpanHelper;
+  NodeContainer leftNodes, leftAp;
+  NodeContainer rightNodes, rightAp;
+
+  leftNodes.Add(p2pNodes.Get(0));
+  rightNodes.Add(p2pNodes.Get(1));
+  leftNodes.Create(nWifi);
+  rightNodes.Create(nWifi);
+
+  NetDeviceContainer
+
+      LrWpanHelper leftlrWpanHelper,
+      rightlrWpanHelper;
   // Add and install the LrWpanNetDevice for each node
-  NetDeviceContainer lrwpanDevices = lrWpanHelper.Install (wsnNodes);
+  NetDeviceContainer leftlrwpanDevices = leftlrWpanHelper.Install(leftNodes);
+  NetDeviceContainer rightlrwpanDevices = rightlrWpanHelper.Install(rightNodes);
 
   // Fake PAN association and short address assignment.
   // This is needed because the lr-wpan module does not provide (yet)
   // a full PAN association procedure.
-  lrWpanHelper.AssociateToPan (lrwpanDevices, 0);
+  leftlrWpanHelper.AssociateToPan(leftlrwpanDevices, 0);
+  rightlrWpanHelper.AssociateToPan(rightlrwpanDevices, 0);
+
+  SixLowPanHelper leftsixLowPanHelper, rightsixLowPanHelper;
+  NetDeviceContainer leftsixLowPanDevices = leftsixLowPanHelper.Install(leftlrwpanDevices);
+  NetDeviceContainer rightsixLowPanDevices = rightsixLowPanHelper.Install(rightlrwpanDevices);
+
+  for (uint32_t i = 0; i < leftsixLowPanDevices.GetN(); i++)
+  {
+    Ptr<NetDevice> dev = leftsixLowPanDevices.Get(i);
+    dev->SetAttribute("UseMeshUnder", BooleanValue(true));
+    dev->SetAttribute("MeshUnderRadius", UintegerValue(10));
+  }
+  for (uint32_t i = 0; i < rightsixLowPanDevices.GetN(); i++)
+  {
+    Ptr<NetDevice> dev = rightsixLowPanDevices.Get(i);
+    dev->SetAttribute("UseMeshUnder", BooleanValue(true));
+    dev->SetAttribute("MeshUnderRadius", UintegerValue(10));
+  }
 
   InternetStackHelper internetv6;
-  internetv6.Install (wsnNodes);
-  internetv6.Install (wiredNodes.Get (0));
-
-  SixLowPanHelper sixLowPanHelper;
-  NetDeviceContainer sixLowPanDevices = sixLowPanHelper.Install (lrwpanDevices);
-
-  CsmaHelper csmaHelper;
-  NetDeviceContainer csmaDevices = csmaHelper.Install (wiredNodes);
+  internetv6.Install(leftNodes);
+  internetv6.Install(rightNodes);
 
   Ipv6AddressHelper ipv6;
-  ipv6.SetBase (Ipv6Address ("2001:cafe::"), Ipv6Prefix (64));
-  Ipv6InterfaceContainer wiredDeviceInterfaces;
-  wiredDeviceInterfaces = ipv6.Assign (csmaDevices);
-  wiredDeviceInterfaces.SetForwarding (1, true);
-  wiredDeviceInterfaces.SetDefaultRouteInAllNodes (1);
+  ipv6.SetBase(Ipv6Address("2001:cafe::"), Ipv6Prefix(64));
 
-  ipv6.SetBase (Ipv6Address ("2001:f00d::"), Ipv6Prefix (64));
-  Ipv6InterfaceContainer wsnDeviceInterfaces;
-  wsnDeviceInterfaces = ipv6.Assign (sixLowPanDevices);
-  wsnDeviceInterfaces.SetForwarding (0, true);
-  wsnDeviceInterfaces.SetDefaultRouteInAllNodes (0);
+  Ipv6InterfaceContainer leftInterfaces;
+  leftInterfaces = ipv6.Assign(leftsixLowPanDevices);
+  leftInterfaces.SetForwarding(1, true);
+  leftInterfaces.SetDefaultRouteInAllNodes(1);
 
-  for (uint32_t i = 0; i < sixLowPanDevices.GetN (); i++)
-    {
-      Ptr<NetDevice> dev = sixLowPanDevices.Get (i);
-      dev->SetAttribute ("UseMeshUnder", BooleanValue (true));
-      dev->SetAttribute ("MeshUnderRadius", UintegerValue (10));
-    }
+  ipv6.SetBase(Ipv6Address("2001:f00d::"), Ipv6Prefix(64));
+  Ipv6InterfaceContainer rightInterfaces;
+  rightInterfaces = ipv6.Assign(rightsixLowPanDevices);
+  rightInterfaces.SetForwarding(0, true);
+  rightInterfaces.SetDefaultRouteInAllNodes(0);
+
+  ipv6.SetBase(Ipv6Address("2001:baab::"), Ipv6Prefix(64));
+  Ipv6InterfaceContainer p2pInterfaces;
+  p2pInterfaces = ipv6.Assign(p2pDevices);
+  p2pInterfaces.SetForwarding(0, true);
+  p2pInterfaces.SetDefaultRouteInAllNodes(0);
+  p2pInterfaces.SetForwarding(1, true);
+  p2pInterfaces.SetDefaultRouteInAllNodes(1);
 
   uint32_t packetSize = 10;
   uint32_t maxPacketCount = 5;
-  Time interPacketInterval = Seconds (1.);
+  Time interPacketInterval = Seconds(1.);
   Ping6Helper ping6;
 
-  ping6.SetLocal (wsnDeviceInterfaces.GetAddress (nWsnNodes - 1, 1));
-  ping6.SetRemote (wiredDeviceInterfaces.GetAddress (0, 1));
+  uint32_t tcp_adu_size = 160;
+  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(tcp_adu_size));
+  for (int i = 0; i < nflows; i++)
+  {
+    PacketSinkHelper sinkHelper("ns3::TcpSocketFactory", Inet6SocketAddress(Ipv4Address::GetAny(), 9 + i));
+    ApplicationContainer sinkApp = sinkHelper.Install(leftNodes.Get(i));
+    sink = StaticCast<PacketSink>(sinkApp.Get(0));
 
-  ping6.SetAttribute ("MaxPackets", UintegerValue (maxPacketCount));
-  ping6.SetAttribute ("Interval", TimeValue (interPacketInterval));
-  ping6.SetAttribute ("PacketSize", UintegerValue (packetSize));
-  ApplicationContainer apps = ping6.Install (wsnNodes.Get (nWsnNodes - 1));
+    /* Install TCP/UDP Transmitter on the station */
+    OnOffHelper server("ns3::TcpSocketFactory", (Inet6SocketAddress(leftInterface.GetAddress(i), 9 + i)));
+    server.SetAttribute("PacketSize", UintegerValue(payloadSize));
+    server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+    server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
 
-  apps.Start (Seconds (1.0));
-  apps.Stop (Seconds (10.0));
+    ApplicationContainer serverApp = server.Install(rightNodes.Get(i));
 
-  AsciiTraceHelper ascii;
-  lrWpanHelper.EnableAsciiAll (ascii.CreateFileStream ("Ping-6LoW-lr-wpan-meshunder-lr-wpan.tr"));
-  lrWpanHelper.EnablePcapAll (std::string ("Ping-6LoW-lr-wpan-meshunder-lr-wpan"), true);
+    /* Start Applications */
+    sinkApp.Start(Seconds(0.0));
+    serverApp.Start(Seconds(1.0));
+  }
 
-  csmaHelper.EnableAsciiAll (ascii.CreateFileStream ("Ping-6LoW-lr-wpan-meshunder-csma.tr"));
-  csmaHelper.EnablePcapAll (std::string ("Ping-6LoW-lr-wpan-meshunder-csma"), true);
+  /* Flow Monitor */
+  FlowMonitorHelper flowmon;
+  Ptr<FlowMonitor> monitor = flowmon.InstallAll();
+  monitor->CheckForLostPackets();
+  // Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
+  // std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats();
 
-  Simulator::Stop (Seconds (10));
+  /* Start Simulation */
+  Simulator::Stop(Seconds(simulationTime));
+  Simulator::Run();
 
-  Simulator::Run ();
-  Simulator::Destroy ();
+  // step 4: Add below code after Simulator::Run ();
+  ///////////////////////////////////// Network Perfomance Calculation /////////////////////////////////////
+
+  int j = 0;
+  float AvgThroughput = 0;
+  Time Jitter;
+  Time Delay;
+
+  Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowmon.GetClassifier());
+  std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
+
+  for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin(); iter != stats.end(); ++iter)
+  {
+    Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(iter->first);
+
+    NS_LOG_UNCOND("----Flow ID:" << iter->first);
+    NS_LOG_UNCOND("Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
+    NS_LOG_UNCOND("Sent Packets=" << iter->second.txPackets);
+    NS_LOG_UNCOND("Received Packets =" << iter->second.rxPackets);
+    NS_LOG_UNCOND("Lost Packets =" << iter->second.txPackets - iter->second.rxPackets);
+    NS_LOG_UNCOND("Packet delivery ratio =" << iter->second.rxPackets * 100 / iter->second.txPackets << "%");
+    NS_LOG_UNCOND("Packet loss ratio =" << (iter->second.txPackets - iter->second.rxPackets) * 100 / iter->second.txPackets << "%");
+    NS_LOG_UNCOND("Delay =" << iter->second.delaySum);
+    NS_LOG_UNCOND("Jitter =" << iter->second.jitterSum);
+    NS_LOG_UNCOND("Throughput =" << iter->second.rxBytes * 8.0 / (iter->second.timeLastRxPacket.GetSeconds() - iter->second.timeFirstTxPacket.GetSeconds()) / 1024 << "Kbps");
+
+    SentPackets = SentPackets + (iter->second.txPackets);
+    ReceivedPackets = ReceivedPackets + (iter->second.rxPackets);
+    LostPackets = LostPackets + (iter->second.txPackets - iter->second.rxPackets);
+    AvgThroughput = AvgThroughput + (iter->second.rxBytes * 8.0 / (iter->second.timeLastRxPacket.GetSeconds() - iter->second.timeFirstTxPacket.GetSeconds()) / 1024);
+    Delay = Delay + (iter->second.delaySum);
+    Jitter = Jitter + (iter->second.jitterSum);
+
+    j = j + 1;
+  }
+
+  AvgThroughput = AvgThroughput / j;
+  NS_LOG_UNCOND("--------Total Results of the simulation----------" << std::endl);
+  NS_LOG_UNCOND("Total sent packets  =" << SentPackets);
+  NS_LOG_UNCOND("Total Received Packets =" << ReceivedPackets);
+  NS_LOG_UNCOND("Total Lost Packets =" << LostPackets);
+  NS_LOG_UNCOND("Packet Loss ratio =" << ((LostPackets * 100) / SentPackets) << "%");
+  NS_LOG_UNCOND("Packet delivery ratio =" << ((ReceivedPackets * 100) / SentPackets) << "%");
+  NS_LOG_UNCOND("Average Throughput =" << AvgThroughput << "Kbps");
+  NS_LOG_UNCOND("End to End Delay =" << Delay);
+  NS_LOG_UNCOND("End to End Jitter delay =" << Jitter);
+  NS_LOG_UNCOND("Total Flod id " << j);
+  monitor->SerializeToXmlFile("lowrate.xml", true, true);
+
+  Simulator::Destroy();
+  return 0;
 }
-
