@@ -329,8 +329,6 @@ int main(int argc, char *argv[])
     FlowMonitorHelper flowmon;
     Ptr<FlowMonitor> monitor = flowmon.InstallAll();
     monitor->CheckForLostPackets();
-    // Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
-    // std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats();
 
     /* Start Simulation */
     Simulator::Stop(Seconds(simulationTime));
@@ -352,7 +350,7 @@ int main(int argc, char *argv[])
         Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(iter->first);
 
         NS_LOG_UNCOND("----Flow ID:" << iter->first);
-        NS_LOG_UNCOND("Src Addr" << t.sourceAddress << "Dst Addr " << t.destinationAddress);
+        NS_LOG_UNCOND("Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
         NS_LOG_UNCOND("Sent Packets=" << iter->second.txPackets);
         NS_LOG_UNCOND("Received Packets =" << iter->second.rxPackets);
         NS_LOG_UNCOND("Lost Packets =" << iter->second.txPackets - iter->second.rxPackets);
