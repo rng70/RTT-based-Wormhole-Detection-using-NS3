@@ -67,20 +67,24 @@ int main(int argc, char **argv)
   /**
    * @brief variable section
   //  */
-  int nflows = 10;                       /* Number of flow */
-  uint32_t nWifi = 50;                   /* Number of nodes */
-  uint32_t nPackets = 2;                 /* Number of packets send per second */
-  uint32_t payloadSize = 1024;           /* Transport layer payload size in bytes. */
+  int nflows = 5;                        /* Number of flow */
+  uint32_t nWifi = 10;                   /* Number of nodes */
+  uint32_t nPackets = 100;               /* Number of packets send per second */
+  uint32_t payloadSize = 4096;           /* Transport layer payload size in bytes. */
   std::string dataRate = "4Mbps";        /* Application layer datarate. */
   std::string tcpVariant = "TcpNewReno"; /* TCP variant type. */
   std::string phyRate = "HtMcs7";        /* Physical layer bitrate. */
-  double simulationTime = 20;            /* Simulation time in seconds. */
+  double simulationTime = 10;            /* Simulation time in seconds. */
+  uint32_t txArea = 5;
+  uint32_t MaxCoverageRange = 10;
 
   /* this is for performance management */
   uint32_t SentPackets = 0;
   uint32_t ReceivedPackets = 0;
   uint32_t LostPackets = 0;
   /* variable declaration ends here */
+  /* Calculate actual datarate here */
+  dataRate = std::to_string((8 * nPackets * payloadSize) / 1024) + "Kbps";
 
   /* prosessing for cmd persing */
   CommandLine cmd(__FILE__);
@@ -94,6 +98,29 @@ int main(int argc, char **argv)
   cmd.AddValue("simulationTime", "Simulation time in seconds", simulationTime);
   cmd.Parse(argc, argv);
   /* cmd perse ends here */
+
+  /* For changing coverage area */
+  // creating a channel with range propagation loss model
+  Config::SetDefault("ns3::RangePropagationLossModel::MaxRange", DoubleValue(MaxCoverageRange * txArea));
+  Ptr<SingleModelSpectrumChannel> channel0 = CreateObject<SingleModelSpectrumChannel>();
+  Ptr<RangePropagationLossModel> propModel0 = CreateObject<RangePropagationLossModel>();
+  Ptr<ConstantSpeedPropagationDelayModel> delayModel0 = CreateObject<ConstantSpeedPropagationDelayModel>();
+  channel0->AddPropagationLossModel(propModel0);
+  channel0->SetPropagationDelayModel(delayModel0);
+  // setting the channel in helper
+  // lrWpanHelper.SetChannel(channel);
+  /* coverage area code ends here */
+  /* For changing coverage area */
+  // creating a channel with range propagation loss model
+  Config::SetDefault("ns3::RangePropagationLossModel::MaxRange", DoubleValue(MaxCoverageRange * txArea));
+  Ptr<SingleModelSpectrumChannel> channel1 = CreateObject<SingleModelSpectrumChannel>();
+  Ptr<RangePropagationLossModel> propModel1 = CreateObject<RangePropagationLossModel>();
+  Ptr<ConstantSpeedPropagationDelayModel> delayModel1 = CreateObject<ConstantSpeedPropagationDelayModel>();
+  channel1->AddPropagationLossModel(propModel1);
+  channel1->SetPropagationDelayModel(delayModel1);
+  // setting the channel in helper
+  // lrWpanHelper.SetChannel(channel);
+  /* coverage area code ends here */
 
   Packet::EnablePrinting();
 
@@ -128,6 +155,11 @@ int main(int argc, char **argv)
   // Add and install the LrWpanNetDevice for each node
   NetDeviceContainer leftlrwpanDevices = leftlrWpanHelper.Install(leftNodes);
   NetDeviceContainer rightlrwpanDevices = rightlrWpanHelper.Install(rightNodes);
+
+  // setting channel for range coverage
+  // setting the channel in helper
+  leftlrWpanHelper.SetChannel(channel0);
+  rightlrWpanHelper.SetChannel(channel1);
 
   // Fake PAN association and short address assignment.
   // This is needed because the lr-wpan module does not provide (yet)
@@ -264,6 +296,18 @@ int main(int argc, char **argv)
   NS_LOG_UNCOND("Total Flod id " << j);
   monitor->SerializeToXmlFile("lowrate.xml", true, true);
 #pragma GCC diagnostic pop
+
+  std::ofstream o1, o2, o3, o4;
+
+  o1.open("task_a_flow_throughput.txt", std::ios_base::app); // append instead of overwrite
+  o1 << 2 * nflows << " " << AvgThroughput << std::endl;
+  o2.open("task_a_flow_eed.txt", std::ios_base::app); // append instead of overwrite
+  o2 << 2 * nflows << " " << Delay.GetSeconds() - tempDelay.GetSeconds() << std::endl;
+  o3.open("task_a_flow_pacdelratio.txt", std::ios_base::app); // append instead of overwrite
+  o3 << 2 * nflows << " " << (((double)ReceivedPackets * 100.0) / (double)SentPackets) << std::endl;
+  o4.open("task_a_flow_pacdrpratio.txt", std::ios_base::app); // append instead of overwrite
+  o4 << 2 * nflows << " " << (((double)LostPackets * 100.0) / (double)SentPackets) << std::endl;
+
   Simulator::Destroy();
   return 0;
 }
