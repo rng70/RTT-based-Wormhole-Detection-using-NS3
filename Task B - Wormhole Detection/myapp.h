@@ -13,6 +13,7 @@ public:
 private:
     virtual void StartApplication(void);
     virtual void StopApplication(void);
+    virtual void PktsAcked(Ptr<TcpSocketState>, uint32_t, const Time &);
 
     void ScheduleTx(void);
     void SendPacket(void);
@@ -27,15 +28,14 @@ private:
     uint32_t m_packetsSent;
 };
 
-MyApp::MyApp():
-    m_socket(0),
-    m_peer(),
-    m_packetSize(0),
-    m_nPackets(0),
-    m_dataRate(0),
-    m_sendEvent(),
-    m_running(false),
-    m_packetsSent(0)
+MyApp::MyApp() : m_socket(0),
+                 m_peer(),
+                 m_packetSize(0),
+                 m_nPackets(0),
+                 m_dataRate(0),
+                 m_sendEvent(),
+                 m_running(false),
+                 m_packetsSent(0)
 {
 }
 
@@ -99,20 +99,20 @@ void MyApp::ScheduleTx(void)
 
 void MyApp::PktsAcked(Ptr<TcpSocketState> tcb, uint32_t segmentsAcked, const Time &rtt)
 {
-    NS_LOG_FUNCTION(this << tcb << segmentsAcked << rtt);
+    // NS_LOG_FUNCTION(this << tcb << segmentsAcked << rtt);
 
     if (rtt.IsZero())
     {
         return;
     }
 
-    m_minRtt = std::min(m_minRtt, rtt);
-    NS_LOG_DEBUG("Updated m_minRtt = " << m_minRtt);
+    //m_minRtt = std::min(m_minRtt, rtt);
+    NS_LOG_UNCOND("Updated m_minRtt = " << rtt);
 
-    m_baseRtt = std::min(m_baseRtt, rtt);
-    NS_LOG_DEBUG("Updated m_baseRtt = " << m_baseRtt);
+    //m_baseRtt = std::min(m_baseRtt, rtt);
+    // NS_LOG_DEBUG("Updated m_baseRtt = " << m_baseRtt);
 
     // Update RTT counter
-    m_cntRtt++;
-    NS_LOG_DEBUG("Updated m_cntRtt = " << m_cntRtt);
+    // m_cntRtt++;
+    // NS_LOG_DEBUG("Updated m_cntRtt = " << m_cntRtt);
 }

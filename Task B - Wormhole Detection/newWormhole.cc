@@ -18,45 +18,65 @@ void ReceivePacket(Ptr<const Packet> p, const Address &addr)
     std::cout << Simulator::Now().GetSeconds() << "\t" << p->GetSize() << "\n";
 }
 
-void create_nodes(NodeContainer &c, NodeContainer &nm, NodeContainer &m)
-{
-    NS_LOG_INFO("Create Nodes");
-
-    c.Create(10);
-
-    nm.Add(c.Get(0));
-    nm.Add(c.Get(3));
-    nm.Add(c.Get(4));
-    nm.Add(c.Get(5));
-    nm.Add(c.Get(6));
-    nm.Add(c.Get(7));
-    nm.Add(c.Get(8));
-    nm.Add(c.Get(9));
-
-    m.Add(c.Get(1));
-    m.Add(c.Get(2));
-}
-
 void wormhole(int param_count, char *param_list[])
 {
+#pragma GCC diagnostic ignored "-Wunused-variable" // "-Wstringop-overflow"
 
     bool enableFlowMonitor = false;
-    std::string phyMode("DsssRate1Mbps");
+    int nWifis = 10;
+    uint32_t port;
+    uint32_t bytesTotal;
+    uint32_t packetsReceived;
+
+    std::string m_CSVfileName;
+    int m_nSinks;
+    std::string m_protocolName;
+    double m_txp;
+    bool m_traceMobility;
+    uint32_t m_protocol;
+
+    double TotalTime = 200.0;
+    std::string rate("2048bps");
+    std::string phyMode("DsssRate11Mbps");
+    std::string tr_name("manet-routing-compare");
+    int nodeSpeed = 20; // in m/s
+    int nodePause = 0;  // in s
+    m_protocolName = "protocol";
 
     CommandLine cmd;
     cmd.AddValue("EnableMonitor", "Enable Flow Monitor", enableFlowMonitor);
     cmd.AddValue("phyMode", "Wifi Phy mode", phyMode);
     cmd.Parse(param_count, param_list);
 
+    Config::SetDefault("ns3::OnOffApplication::PacketSize", StringValue("64"));
+    Config::SetDefault("ns3::OnOffApplication::DataRate", StringValue(rate));
+
+    // Set Non-unicastMode rate to unicast mode
+    Config::SetDefault("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue(phyMode));
+
     // Create Nodes
-    NodeContainer c;
+    NodeContainer cdevices;
     NodeContainer malicious;
     NodeContainer not_malicious;
 
-    create_nodes(c, not_malicious, malicious);
+    cdevices.Create(nWifis);
+
+    not_malicious.Add(cdevices.Get(0));
+    not_malicious.Add(cdevices.Get(3));
+    not_malicious.Add(cdevices.Get(4));
+    not_malicious.Add(cdevices.Get(5));
+    not_malicious.Add(cdevices.Get(6));
+    not_malicious.Add(cdevices.Get(7));
+    not_malicious.Add(cdevices.Get(8));
+    not_malicious.Add(cdevices.Get(9));
+
+    malicious.Add(cdevices.Get(1));
+    malicious.Add(cdevices.Get(2));
 
     // Setup wifi
     WifiHelper wifi;
+    wifi.SetStandard(WIFI_STANDARD_80211b);
+
     YansWifiPhyHelper wifiPhy;
     wifiPhy.SetErrorRateModel("ns3::NistErrorRateModel");
     wifiPhy.SetPcapDataLinkType(YansWifiPhyHelper::DLT_IEEE802_11);
@@ -67,8 +87,8 @@ void wormhole(int param_count, char *param_list[])
     wifiChannel.AddPropagationLoss("ns3::TwoRayGroundPropagationLossModel", "SystemLoss", DoubleValue(1), "HeightAboveZ", DoubleValue(1.5));
 
     // For range near 250m
-    // wifiPhy.Set("TxPowerStart", DoubleValue(33));
-    // wifiPhy.Set("TxPowerEnd", DoubleValue(33));
+    wifiPhy.Set("TxPowerStart", DoubleValue(33));
+    wifiPhy.Set("TxPowerEnd", DoubleValue(33));
     // wifiPhy.Set("TxPowerLevels", UintegerValue(1));
     // wifiPhy.Set("TxGain", DoubleValue(0));
     // wifiPhy.Set("RxGain", DoubleValue(0));
@@ -81,16 +101,43 @@ void wormhole(int param_count, char *param_list[])
     WifiMacHelper wifiMac;
     wifiMac.SetType("ns3::AdhocWifiMac");
 
-    // Set 802.11b standard
-    wifi.SetStandard(WIFI_STANDARD_80211b);
-
     wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager",
                                  "DataMode", StringValue(phyMode),
                                  "ControlMode", StringValue(phyMode));
 
     NetDeviceContainer devices, mal_devices;
-    devices = wifi.Install(wifiPhy, wifiMac, c);
+    devices = wifi.Install(wifiPhy, wifiMac, cdevices);
     mal_devices = wifi.Install(wifiPhy, wifiMac, malicious);
+
+    /** added by me **/
+
+    MobilityHelper mobilityAdhoc;
+    int64_t streamIndex = 0; // used to get consistent mobility across scenarios
+
+    ObjectFactory pos;
+    pos.SetTypeId("ns3::RandomRectanglePositionAllocator");
+    pos.Set("X", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=300.0]"));
+    pos.Set("Y", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1500.0]"));
+
+    Ptr<PositionAllocator> taPositionAlloc = pos.Create()->GetObject<PositionAllocator>();
+    streamIndex += taPositionAlloc->AssignStreams(streamIndex);
+
+    std::stringstream ssSpeed;
+    ssSpeed << "ns3::UniformRandomVariable[Min=0.0|Max=" << nodeSpeed << "]";
+    std::stringstream ssPause;
+    ssPause << "ns3::ConstantRandomVariable[Constant=" << nodePause << "]";
+    mobilityAdhoc.SetMobilityModel("ns3::RandomWaypointMobilityModel",
+                                   "Speed", StringValue(ssSpeed.str()),
+                                   "Pause", StringValue(ssPause.str()),
+                                   "PositionAllocator", PointerValue(taPositionAlloc));
+    mobilityAdhoc.SetPositionAllocator(taPositionAlloc);
+    mobilityAdhoc.Install(cdevices);
+    mobilityAdhoc.Install(malicious);
+    mobilityAdhoc.Install(not_malicious);
+    streamIndex += mobilityAdhoc.AssignStreams(cdevices, streamIndex);
+    streamIndex += mobilityAdhoc.AssignStreams(malicious, streamIndex);
+    streamIndex += mobilityAdhoc.AssignStreams(not_malicious, streamIndex);
+    NS_UNUSED(streamIndex); // From this point, streamIndex is unused
 
     //  Enable AODV
     AodvHelper aodv;
@@ -124,44 +171,45 @@ void wormhole(int param_count, char *param_list[])
 
     uint16_t sinkPort = 6;
     Address sinkAddress(InetSocketAddress(ifcont.GetAddress(3), sinkPort)); // interface of n3
-    PacketSinkHelper packetSinkHelper("ns3::UdpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), sinkPort));
-    ApplicationContainer sinkApps = packetSinkHelper.Install(c.Get(3)); // n3 as sink
+    PacketSinkHelper packetSinkHelper("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), sinkPort));
+    ApplicationContainer sinkApps = packetSinkHelper.Install(cdevices.Get(3)); // n3 as sink
+
     sinkApps.Start(Seconds(0.));
     sinkApps.Stop(Seconds(100.));
 
-    Ptr<Socket> ns3UdpSocket = Socket::CreateSocket(c.Get(0), UdpSocketFactory::GetTypeId()); // source at n0
+    Ptr<Socket> ns3UdpSocket = Socket::CreateSocket(cdevices.Get(0), TcpSocketFactory::GetTypeId()); // source at n0
 
     // Create UDP application at n0
     Ptr<MyApp> app = CreateObject<MyApp>();
     app->Setup(ns3UdpSocket, sinkAddress, 1040, 5, DataRate("250Kbps"));
-    c.Get(0)->AddApplication(app);
+    cdevices.Get(0)->AddApplication(app);
     app->SetStartTime(Seconds(40.));
     app->SetStopTime(Seconds(100.));
 
     // Set Mobility for all nodes
 
-    MobilityHelper mobility;
-    Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
-    positionAlloc->Add(Vector(100, 0, 0));  // node0
-    positionAlloc->Add(Vector(200, 0, 0));  // node1
-    positionAlloc->Add(Vector(450, 0, 0));  // node2
-    positionAlloc->Add(Vector(550, 0, 0));  // node3
-    positionAlloc->Add(Vector(200, 10, 0)); // node4
-    positionAlloc->Add(Vector(450, 10, 0)); // node5
+    // MobilityHelper mobility;
+    // Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
+    // positionAlloc->Add(Vector(100, 0, 0));  // node0
+    // positionAlloc->Add(Vector(200, 0, 0));  // node1
+    // positionAlloc->Add(Vector(450, 0, 0));  // node2
+    // positionAlloc->Add(Vector(550, 0, 0));  // node3
+    // positionAlloc->Add(Vector(200, 10, 0)); // node4
+    // positionAlloc->Add(Vector(450, 10, 0)); // node5
 
-    mobility.SetPositionAllocator(positionAlloc);
-    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    mobility.Install(c);
+    // mobility.SetPositionAllocator(positionAlloc);
+    // mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    // mobility.Install(c);
 
-    AnimationInterface anim("wormhole.xml"); // Mandatory
-    AnimationInterface::SetConstantPosition(c.Get(0), 0, 500);
-    AnimationInterface::SetConstantPosition(c.Get(1), 200, 500);
-    AnimationInterface::SetConstantPosition(c.Get(2), 400, 500);
-    AnimationInterface::SetConstantPosition(c.Get(3), 600, 500);
-    AnimationInterface::SetConstantPosition(c.Get(4), 200, 600);
-    AnimationInterface::SetConstantPosition(c.Get(5), 400, 600);
+    // AnimationInterface anim("wormhole.xml"); // Mandatory
+    // AnimationInterface::SetConstantPosition(cdevices.Get(0), 0, 500);
+    // AnimationInterface::SetConstantPosition(cdevices.Get(1), 200, 500);
+    // AnimationInterface::SetConstantPosition(cdevices.Get(2), 400, 500);
+    // AnimationInterface::SetConstantPosition(cdevices.Get(3), 600, 500);
+    // AnimationInterface::SetConstantPosition(cdevices.Get(4), 200, 600);
+    // AnimationInterface::SetConstantPosition(cdevices.Get(5), 400, 600);
 
-    anim.EnablePacketMetadata(true);
+    // anim.EnablePacketMetadata(true);
 
     Ptr<OutputStreamWrapper> routingStream = Create<OutputStreamWrapper>("wormhole.routes", std::ios::out);
     aodv.PrintRoutingTableAllAt(Seconds(45), routingStream);
@@ -191,14 +239,26 @@ void wormhole(int param_count, char *param_list[])
         Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(i->first);
         if ((t.sourceAddress == "10.0.1.1" && t.destinationAddress == "10.0.1.4"))
         {
-            std::cout << "  Flow " << i->first << " (" << t.sourceAddress << " -> " << t.destinationAddress << ")\n";
-            std::cout << "  Tx Bytes:   " << i->second.txBytes << "\n";
-            std::cout << "  Rx Bytes:   " << i->second.rxBytes << "\n";
-            std::cout << "  Throughput: " << i->second.rxBytes * 8.0 / (i->second.timeLastRxPacket.GetSeconds() - i->second.timeFirstTxPacket.GetSeconds()) / 1024 / 1024 << " Mbps\n";
+            std::cout << "Source: " << t.sourceAddress << " --> Destination " << t.destinationAddress << std::endl;
+            std::cout << "\t  Flow " << i->first << " (" << t.sourceAddress << " -> " << t.destinationAddress << ")\n";
+            std::cout << "\t  Tx Bytes:   " << i->second.txBytes << "\n";
+            std::cout << "\t  Rx Bytes:   " << i->second.rxBytes << "\n";
+            std::cout << "\t  Throughput: " << i->second.rxBytes * 8.0 / (i->second.timeLastRxPacket.GetSeconds() - i->second.timeFirstTxPacket.GetSeconds()) / 1024 / 1024 << " Mbps\n";
+            std::cout << "\t  Delay:      " << i->second.delaySum << std::endl;
+        }
+        else
+        {
+            std::cout << "Not wormhole: Source: " << t.sourceAddress << " --> Destination " << t.destinationAddress << std::endl;
+            std::cout << "\t  Flow " << i->first << " (" << t.sourceAddress << " -> " << t.destinationAddress << ")\n";
+            std::cout << "\t  Tx Bytes:   " << i->second.txBytes << "\n";
+            std::cout << "\t  Rx Bytes:   " << i->second.rxBytes << "\n";
+            std::cout << "\t  Throughput: " << i->second.rxBytes * 8.0 / (i->second.timeLastRxPacket.GetSeconds() - i->second.timeFirstTxPacket.GetSeconds()) / 1024 / 1024 << " Mbps\n";
+            std::cout << "\t  Delay:      " << i->second.delaySum << std::endl;
         }
     }
 
     monitor->SerializeToXmlFile("lab-4.flowmon", true, true);
+#pragma GCC diagnostic pop
 
     Simulator::Destroy();
 }
