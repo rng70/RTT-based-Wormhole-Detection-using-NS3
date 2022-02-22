@@ -76,7 +76,7 @@ int main(int argc, char **argv)
   std::string phyRate = "HtMcs7";        /* Physical layer bitrate. */
   double simulationTime = 10;            /* Simulation time in seconds. */
   uint32_t txArea = 5;
-  uint32_t MaxCoverageRange = 10;
+  uint32_t MaxCoverageRange = 50;
 
   /* this is for performance management */
   uint32_t SentPackets = 0;
@@ -184,6 +184,19 @@ int main(int argc, char **argv)
     dev->SetAttribute("MeshUnderRadius", UintegerValue(10));
   }
 
+  MobilityHelper mobility;
+  mobility.SetPositionAllocator("ns3::GridPositionAllocator",
+                                "MinX", DoubleValue(0.0),
+                                "MinY", DoubleValue(0.0),
+                                "DeltaX", DoubleValue(0.5),
+                                "DeltaY", DoubleValue(1.0),
+                                "GridWidth", UintegerValue(3),
+                                "LayoutType", StringValue("RowFirst"));
+
+  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+  mobility.Install(leftNodes);
+  mobility.Install(rightNodes);
+
   InternetStackHelper internetv6;
   internetv6.Install(leftNodes);
   internetv6.Install(rightNodes);
@@ -252,7 +265,8 @@ int main(int argc, char **argv)
   int j = 0;
   float AvgThroughput = 0;
   Time Jitter;
-  Time Delay;
+  Time Delay = Simulator::Now();
+  Time tempDelay = Delay;
 
   Ptr<Ipv6FlowClassifier> classifier = DynamicCast<Ipv6FlowClassifier>(flowmon.GetClassifier());
   std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
@@ -299,14 +313,14 @@ int main(int argc, char **argv)
 
   std::ofstream o1, o2, o3, o4;
 
-  o1.open("task_a_flow_throughput.txt", std::ios_base::app); // append instead of overwrite
-  o1 << 2 * nflows << " " << AvgThroughput << std::endl;
-  o2.open("task_a_flow_eed.txt", std::ios_base::app); // append instead of overwrite
-  o2 << 2 * nflows << " " << Delay.GetSeconds() - tempDelay.GetSeconds() << std::endl;
-  o3.open("task_a_flow_pacdelratio.txt", std::ios_base::app); // append instead of overwrite
-  o3 << 2 * nflows << " " << (((double)ReceivedPackets * 100.0) / (double)SentPackets) << std::endl;
-  o4.open("task_a_flow_pacdrpratio.txt", std::ios_base::app); // append instead of overwrite
-  o4 << 2 * nflows << " " << (((double)LostPackets * 100.0) / (double)SentPackets) << std::endl;
+  o1.open("task_a_txarea_throughput.txt", std::ios_base::app); // append instead of overwrite
+  o1 << MaxCoverageRange * txArea << " " << AvgThroughput << std::endl;
+  o2.open("task_a_txarea_eed.txt", std::ios_base::app); // append instead of overwrite
+  o2 << MaxCoverageRange * txArea << " " << Delay.GetSeconds() - tempDelay.GetSeconds() << std::endl;
+  o3.open("task_a_txarea_pacdelratio.txt", std::ios_base::app); // append instead of overwrite
+  o3 << MaxCoverageRange * txArea << " " << (((double)ReceivedPackets * 100.0) / (double)SentPackets) << std::endl;
+  o4.open("task_a_txarea_pacdrpratio.txt", std::ios_base::app); // append instead of overwrite
+  o4 << MaxCoverageRange * txArea << " " << (((double)LostPackets * 100.0) / (double)SentPackets) << std::endl;
 
   Simulator::Destroy();
   return 0;
