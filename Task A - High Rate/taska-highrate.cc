@@ -402,7 +402,6 @@ int main(int argc, char *argv[])
     o2 << 2 * nflows << " " << Delay.GetSeconds() - tempDelay.GetSeconds() << std::endl;
     o3.open("task_a_flow_pacdelratio.txt", std::ios_base::app); // append instead of overwrite
     o3 << 2 * nflows << " " << (((double)ReceivedPackets * 100.0) / (double)SentPackets) << std::endl;
-    ;
     o4.open("task_a_flow_pacdrpratio.txt", std::ios_base::app); // append instead of overwrite
     o4 << 2 * nflows << " " << (((double)LostPackets * 100.0) / (double)SentPackets) << std::endl;
 
