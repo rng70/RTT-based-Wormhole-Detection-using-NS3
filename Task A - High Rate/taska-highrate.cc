@@ -1,3 +1,4 @@
+#include <fstream>
 #include "ns3/command-line.h"
 #include "ns3/config.h"
 #include "ns3/string.h"
@@ -60,22 +61,24 @@ int main(int argc, char *argv[])
     /**
      * @brief variable section
     //  */
-    int nodeSpeed = 10; /* Speed of nodes in m/s */
+    int nodeSpeed = 5; /* Speed of nodes in m/s */
     // int nodePause = 0;                     /* Pause time in s */
-    int nflows = 10;                       /* Number of flow */
+    int nflows = 25;                       /* Number of flow */
     uint32_t nWifi = 50;                   /* Number of nodes */
-    uint32_t nPackets = 2;                 /* Number of packets send per second */
+    uint32_t nPackets = 100;               /* Number of packets send per second */
     uint32_t payloadSize = 1024;           /* Transport layer payload size in bytes. */
     std::string dataRate = "4Mbps";        /* Application layer datarate. */
     std::string tcpVariant = "TcpNewReno"; /* TCP variant type. */
     std::string phyRate = "HtMcs7";        /* Physical layer bitrate. */
-    double simulationTime = 120;           /* Simulation time in seconds. */
+    double simulationTime = 10;            /* Simulation time in seconds. */
 
     /* this is for performance management */
     uint32_t SentPackets = 0;
     uint32_t ReceivedPackets = 0;
     uint32_t LostPackets = 0;
     /* variable declaration ends here */
+    /* Calculate actual datarate here */
+    dataRate = std::to_string((8 * nPackets * payloadSize) / 1024) + "Kbps";
 
     /* prosessing for cmd persing */
     CommandLine cmd(__FILE__);
@@ -340,7 +343,8 @@ int main(int argc, char *argv[])
     int j = 0;
     float AvgThroughput = 0;
     Time Jitter;
-    Time Delay;
+    Time Delay = Simulator::Now();
+    Time tempDelay = Delay;
 
     Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowmon.GetClassifier());
     std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
@@ -389,6 +393,18 @@ int main(int argc, char *argv[])
     // flowMonitor->SerializeToXmlFile("./highrateSimulation/flowstat.xml", false, false);
 
     // double averageThroughput = ((sink->GetTotalRx() * 8) / (1e6 * simulationTime));
+
+    std::ofstream o1, o2, o3, o4;
+
+    o1.open("task_a_flow_throughput.txt", std::ios_base::app); // append instead of overwrite
+    o1 << 2 * nflows << " " << AvgThroughput << std::endl;
+    o2.open("task_a_flow_eed.txt", std::ios_base::app); // append instead of overwrite
+    o2 << 2 * nflows << " " << Delay.GetSeconds() - tempDelay.GetSeconds() << std::endl;
+    o3.open("task_a_flow_pacdelratio.txt", std::ios_base::app); // append instead of overwrite
+    o3 << 2 * nflows << " " << (((double)ReceivedPackets * 100.0) / (double)SentPackets) << std::endl;
+    ;
+    o4.open("task_a_flow_pacdrpratio.txt", std::ios_base::app); // append instead of overwrite
+    o4 << 2 * nflows << " " << (((double)LostPackets * 100.0) / (double)SentPackets) << std::endl;
 
     Simulator::Destroy();
 
