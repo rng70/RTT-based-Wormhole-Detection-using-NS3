@@ -62,11 +62,12 @@ Ptr<PacketSink> sink; /* Pointer to the packet sink application */
 
 int main(int argc, char **argv)
 {
-#pragma GCC diagnostic ignored "-Wunused-variable" // "-Wstringop-overflow"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
   bool verbose = false;
   /**
    * @brief variable section
-  //  */
+   */
   int nflows = 5;                        /* Number of flow */
   uint32_t nWifi = 10;                   /* Number of nodes */
   uint32_t nPackets = 100;               /* Number of packets send per second */
@@ -83,6 +84,7 @@ int main(int argc, char **argv)
   uint32_t ReceivedPackets = 0;
   uint32_t LostPackets = 0;
   /* variable declaration ends here */
+
   /* Calculate actual datarate here */
   dataRate = std::to_string((8 * nPackets * payloadSize) / 1024) + "Kbps";
 
@@ -107,9 +109,8 @@ int main(int argc, char **argv)
   Ptr<ConstantSpeedPropagationDelayModel> delayModel0 = CreateObject<ConstantSpeedPropagationDelayModel>();
   channel0->AddPropagationLossModel(propModel0);
   channel0->SetPropagationDelayModel(delayModel0);
-  // setting the channel in helper
-  // lrWpanHelper.SetChannel(channel);
   /* coverage area code ends here */
+
   /* For changing coverage area */
   // creating a channel with range propagation loss model
   Config::SetDefault("ns3::RangePropagationLossModel::MaxRange", DoubleValue(MaxCoverageRange * txArea));
@@ -118,8 +119,6 @@ int main(int argc, char **argv)
   Ptr<ConstantSpeedPropagationDelayModel> delayModel1 = CreateObject<ConstantSpeedPropagationDelayModel>();
   channel1->AddPropagationLossModel(propModel1);
   channel1->SetPropagationDelayModel(delayModel1);
-  // setting the channel in helper
-  // lrWpanHelper.SetChannel(channel);
   /* coverage area code ends here */
 
   Packet::EnablePrinting();
@@ -223,10 +222,8 @@ int main(int argc, char **argv)
   p2pInterfaces.SetForwarding(1, true);
   p2pInterfaces.SetDefaultRouteInAllNodes(1);
 
-  // uint32_t packetSize = 10;
-  // uint32_t maxPacketCount = 5;
+
   Time interPacketInterval = Seconds(1.);
-  // Ping6Helper ping6;
 
   uint32_t tcp_adu_size = 160;
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(tcp_adu_size));
@@ -259,7 +256,7 @@ int main(int argc, char **argv)
   Simulator::Stop(Seconds(simulationTime));
   Simulator::Run();
 
-  // step 4: Add below code after Simulator::Run ();
+
   ///////////////////////////////////// Network Perfomance Calculation /////////////////////////////////////
 
   int j = 0;
@@ -274,10 +271,7 @@ int main(int argc, char **argv)
 
   for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator iter = stats.begin(); iter != stats.end(); ++iter)
   {
-    // Ipv6FlowClassifier::FiveTuple t = classifier->FindFlow(iter->first);
-
     NS_LOG_UNCOND("----Flow ID:" << iter->first);
-    // NS_LOG_UNCOND("Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
     NS_LOG_UNCOND("Sent Packets=" << iter->second.txPackets);
     NS_LOG_UNCOND("Received Packets =" << iter->second.rxPackets);
     NS_LOG_UNCOND("Lost Packets =" << iter->second.txPackets - iter->second.rxPackets);
@@ -309,17 +303,18 @@ int main(int argc, char **argv)
   NS_LOG_UNCOND("End to End Jitter delay =" << Jitter);
   NS_LOG_UNCOND("Total Flod id " << j);
   monitor->SerializeToXmlFile("lowrate.xml", true, true);
+
 #pragma GCC diagnostic pop
 
   std::ofstream o1, o2, o3, o4;
 
-  o1.open("task_a_txarea_throughput.txt", std::ios_base::app); // append instead of overwrite
+  o1.open("task_a_txarea_throughput.txt", std::ios_base::app);                                                       // append instead of overwrite
   o1 << MaxCoverageRange * txArea << " " << AvgThroughput << std::endl;
-  o2.open("task_a_txarea_eed.txt", std::ios_base::app); // append instead of overwrite
+  o2.open("task_a_txarea_eed.txt", std::ios_base::app);                                                              // append instead of overwrite
   o2 << MaxCoverageRange * txArea << " " << Delay.GetSeconds() - tempDelay.GetSeconds() << std::endl;
-  o3.open("task_a_txarea_pacdelratio.txt", std::ios_base::app); // append instead of overwrite
+  o3.open("task_a_txarea_pacdelratio.txt", std::ios_base::app);                                                      // append instead of overwrite
   o3 << MaxCoverageRange * txArea << " " << (((double)ReceivedPackets * 100.0) / (double)SentPackets) << std::endl;
-  o4.open("task_a_txarea_pacdrpratio.txt", std::ios_base::app); // append instead of overwrite
+  o4.open("task_a_txarea_pacdrpratio.txt", std::ios_base::app);                                                      // append instead of overwrite
   o4 << MaxCoverageRange * txArea << " " << (((double)LostPackets * 100.0) / (double)SentPackets) << std::endl;
 
   Simulator::Destroy();
