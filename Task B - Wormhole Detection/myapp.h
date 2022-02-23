@@ -13,7 +13,6 @@ public:
 private:
     virtual void StartApplication(void);
     virtual void StopApplication(void);
-    virtual void PktsAcked(Ptr<TcpSocketState>, uint32_t, const Time &);
 
     void ScheduleTx(void);
     void SendPacket(void);
@@ -95,24 +94,4 @@ void MyApp::ScheduleTx(void)
         Time tNext(Seconds(m_packetSize * 8 / static_cast<double>(m_dataRate.GetBitRate())));
         m_sendEvent = Simulator::Schedule(tNext, &MyApp::SendPacket, this);
     }
-}
-
-void MyApp::PktsAcked(Ptr<TcpSocketState> tcb, uint32_t segmentsAcked, const Time &rtt)
-{
-    // NS_LOG_FUNCTION(this << tcb << segmentsAcked << rtt);
-
-    if (rtt.IsZero())
-    {
-        return;
-    }
-
-    //m_minRtt = std::min(m_minRtt, rtt);
-    NS_LOG_UNCOND("Updated m_minRtt = " << rtt);
-
-    //m_baseRtt = std::min(m_baseRtt, rtt);
-    // NS_LOG_DEBUG("Updated m_baseRtt = " << m_baseRtt);
-
-    // Update RTT counter
-    // m_cntRtt++;
-    // NS_LOG_DEBUG("Updated m_cntRtt = " << m_cntRtt);
 }
